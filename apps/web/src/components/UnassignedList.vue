@@ -104,9 +104,9 @@ function handleRestore(username: string) {
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
     <!-- 头部：标签栏与搜索 -->
     <div class="p-4 border-b border-slate-100 bg-slate-50/70">
-      <!-- 标签页切换：待整装 vs 免报名 -->
+      <!-- 标签页切换：仅管理员可见免报名标签，普通员工仅展示待整装标题 -->
       <div class="flex items-center justify-between gap-2 mb-3">
-        <div class="inline-flex p-1 bg-slate-200/70 rounded-lg text-xs font-semibold">
+        <div v-if="isAdmin" class="inline-flex p-1 bg-slate-200/70 rounded-lg text-xs font-semibold">
           <button
             class="px-3 py-1 rounded-md transition flex items-center gap-1.5"
             :class="activeTab === 'unassigned' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'"
@@ -135,6 +135,15 @@ function handleRestore(username: string) {
             </span>
           </button>
         </div>
+
+        <div v-else class="flex items-center gap-2">
+          <span class="text-base">👟</span>
+          <h3 class="font-bold text-sm text-slate-900">待整装战友 (未报名)</h3>
+        </div>
+
+        <span v-if="!isAdmin" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+          {{ employees.length }} 位待入列
+        </span>
 
         <!-- 管理员快速添加免报按钮 -->
         <button

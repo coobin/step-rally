@@ -54,6 +54,7 @@ export interface RallyState {
   }
   teams: Team[]
   excludedUsers?: ExcludedUser[]
+  adminUsernames?: string[]
   updatedAt: string
 }
 
@@ -88,6 +89,9 @@ export class RallyStore {
           if (!Array.isArray(parsed.excludedUsers)) {
             parsed.excludedUsers = []
           }
+          if (!Array.isArray(parsed.adminUsernames)) {
+            parsed.adminUsernames = []
+          }
           return parsed
         }
       }
@@ -118,6 +122,7 @@ export class RallyStore {
         votes: {},
       })),
       excludedUsers: [],
+      adminUsernames: [],
       updatedAt: new Date().toISOString(),
     }
 
@@ -210,7 +215,7 @@ export class RallyStore {
   }
 
   // 获取当前系统所有报名情况及状态（结合 LDAP 全体在职员工）
-  public async getSnapshot() {
+  public async getSnapshot(isAdmin = false) {
     const teams = this.getTeamsSummary()
     const registeredUsernames = new Set<string>()
     for (const t of teams) {
@@ -267,10 +272,11 @@ export class RallyStore {
       teams,
       departments,
       unassignedEmployees,
-      excludedEmployees: enrichedExcludedEmployees,
+      // 仅管理员可见免报名人员明细与免报统计数
+      excludedEmployees: isAdmin ? enrichedExcludedEmployees : [],
       statistics: {
         totalCompanyEmployees,
-        excludedCount,
+        ...(isAdmin ? { excludedCount } : {}),
         eligibleEmployeesCount,
         totalMembers,
         unassignedCount: unassignedEmployees.length,
@@ -510,6 +516,101 @@ export class RallyStore {
     return {
       success: true,
       message: `已恢复【${removed.displayName}】的报名参战资格`,
+    }
+  }
+
+  // 获取所有管理员账号（合并环境变量内置与动态添加）
+  public getAdminUsernames(): string[] {
+    const builtin = appConfig.auth.adminUsernames.map((u) => u.toLowerCase())
+    const custom = (this.state.adminUsernames || []).map((u) => u.toLowerCase())
+    return [...new Set([...builtin, ...custom])]
+  }
+
+  // 判断用户是否为管理员
+  public isAdmin(username: string): boolean {
+    if (!username) return false
+    return this.getAdminUsernames().includes(username.trim().toLowerCase())
+  }
+
+  // 获取管理员设置详情
+  public getAdminSettingsDetails() {
+    const builtinSet = new Set(appConfig.auth.adminUsernames.map((u) => u.toLowerCase()))
+    const allAdmins = this.getAdminUsernames()
+
+    const admins = allAdmins.map((u) => ({
+      username: u,
+      isBuiltin: builtinSet.has(u),
+    }))
+
+    return {
+      admins,
+      excludedUsers: this.state.excludedUsers || [],
+      activityRules: this.state.activityRules,
+      teams: this.state.teams.map((t) => ({
+        id: t.id,
+        name: t.name,
+        memberCount: t.members.length,
+        maxMembers: t.maxMembers,
+      })),
+      updatedAt: this.state.updatedAt,
+    }
+  }
+
+  // 添加管理员
+  public addAdmin(username: string): { success: boolean; message: string; admins: Array<{ username: string; isBuiltin: boolean }> } {
+    const u = username.trim().toLowerCase()
+    if (!u) {
+      return { success: false, message: '请输入合法的员工工号或账号', admins: this.getAdminSettingsDetails().admins }
+    }
+
+    if (!this.state.adminUsernames) {
+      this.state.adminUsernames = []
+    }
+
+    if (this.isAdmin(u)) {
+      return { success: false, message: `【${username}】已经是系统管理员，无需重复添加`, admins: this.getAdminSettingsDetails().admins }
+    }
+
+    this.state.adminUsernames.push(u)
+    this.saveState()
+
+    return {
+      success: true,
+      message: `已成功将【${username}】添加为系统管理员`,
+      admins: this.getAdminSettingsDetails().admins,
+    }
+  }
+
+  // 移除管理员
+  public removeAdmin(
+    username: string,
+    operatorUsername: string,
+  ): { success: boolean; message: string; admins: Array<{ username: string; isBuiltin: boolean }> } {
+    const u = username.trim().toLowerCase()
+    if (u === operatorUsername.trim().toLowerCase()) {
+      return { success: false, message: '不能移除当前正在操作的自身管理员权限', admins: this.getAdminSettingsDetails().admins }
+    }
+
+    const builtinSet = new Set(appConfig.auth.adminUsernames.map((x) => x.toLowerCase()))
+    if (builtinSet.has(u)) {
+      return {
+        success: false,
+        message: `【${username}】为系统底层配置文件中设定的默认管理员，无法在界面直接移除`,
+        admins: this.getAdminSettingsDetails().admins,
+      }
+    }
+
+    if (!this.state.adminUsernames || !this.state.adminUsernames.includes(u)) {
+      return { success: false, message: '该账号不在管理员名单中', admins: this.getAdminSettingsDetails().admins }
+    }
+
+    this.state.adminUsernames = this.state.adminUsernames.filter((x) => x !== u)
+    this.saveState()
+
+    return {
+      success: true,
+      message: `已成功移除【${username}】的管理员权限`,
+      admins: this.getAdminSettingsDetails().admins,
     }
   }
 }

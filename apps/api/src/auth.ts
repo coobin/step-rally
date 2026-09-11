@@ -2,6 +2,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypt
 import type { IncomingMessage } from 'node:http'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { appConfig } from './config.ts'
+import { rallyStore } from './store.ts'
 
 const sessionCookieName = 'rally_session'
 const oidcStateCookieName = 'rally_oidc_state'
@@ -128,7 +129,7 @@ export function currentUser(request: IncomingMessage): AuthUser | null {
 }
 
 export function isUserAdmin(username: string): boolean {
-  return appConfig.auth.adminUsernames.includes(username.toLowerCase())
+  return rallyStore.isAdmin(username)
 }
 
 let discoveryCache: { value: OidcDiscovery; expiresAt: number } | null = null
@@ -173,11 +174,11 @@ export function resolveRedirectUri(request?: IncomingMessage): string {
     const host = (request.headers['x-forwarded-host'] || request.headers.host || '') as string
     if (host) {
       const cleanHost = host.split(',')[0].trim()
-      const proto = (request.headers['x-forwarded-proto'] || (cleanHost.startsWith('localhost') || cleanHost.startsWith('127.0.0.1') ? 'http' : 'https')) as string
+      const proto = (request.headers['x-forwarded-proto'] || (cleanHost.includes('chencytech.com') ? 'https' : 'http')) as string
       return `${proto}://${cleanHost}${authPrefix}/oidc/callback`
     }
   }
-  return appConfig.auth.redirectUri || 'http://localhost:8095/api/v1/auth/oidc/callback'
+  return appConfig.auth.redirectUri || 'https://run.chencytech.com/api/v1/auth/oidc/callback'
 }
 
 export async function oidcLogin(request?: IncomingMessage): Promise<AuthRouteResponse> {

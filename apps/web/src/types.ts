@@ -102,3 +102,28 @@ export interface SnapshotData {
   }
   updatedAt: string
 }
+
+export interface AdminItem {
+  username: string
+  isBuiltin: boolean
+}
+
+export interface AdminSettingsData {
+  admins: AdminItem[]
+  excludedUsers: ExcludedUser[]
+  activityRules: {
+    totalTeams: number
+    targetPerTeam: number
+    maxPerTeam: number
+    targetStepsDaily: number
+    totalStepsTarget: number
+    totalKmTarget: number
+  }
+  teams: Array<{
+    id: number
+    name: string
+    memberCount: number
+    maxMembers: number
+  }>
+  updatedAt: string
+}

@@ -9,6 +9,7 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'refresh'): void
   (e: 'leave-team'): void
+  (e: 'open-admin-settings'): void
 }>()
 
 function downloadExcel() {
@@ -53,16 +54,24 @@ function logout() {
       </div>
 
       <!-- 右侧个人状态与操作 -->
-      <div class="flex items-center gap-3">
-        <!-- 仅管理员显示导出花名册按钮 -->
-        <button
-          v-if="me?.user?.isAdmin"
-          class="btn btn-secondary text-xs px-3 py-1.5"
-          @click="downloadExcel"
-          title="管理员导出当前报名花名册 Excel"
-        >
-          <span>📊 导出名册</span>
-        </button>
+      <div class="flex items-center gap-2.5">
+        <!-- 仅管理员显示管理员设置与导出名册按钮 -->
+        <template v-if="me?.user?.isAdmin">
+          <button
+            class="btn btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1 hover:border-red-400 hover:text-red-700 transition"
+            @click="emit('open-admin-settings')"
+            title="打开系统管理员设置中心"
+          >
+            <span>⚙️ 管理员设置</span>
+          </button>
+          <button
+            class="btn btn-secondary text-xs px-2.5 py-1.5"
+            @click="downloadExcel"
+            title="管理员导出当前报名花名册 Excel"
+          >
+            <span>📊 导出名册</span>
+          </button>
+        </template>
 
         <div v-if="me?.user" class="flex items-center gap-2.5 pl-3 border-l border-slate-200">
           <div class="text-right">

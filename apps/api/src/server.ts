@@ -199,7 +199,8 @@ const server = createServer(async (req, res) => {
 
       // 6. 获取所有队伍与活动概览数据
       if (isGetOrHead && pathname === '/api/v1/teams') {
-        const snapshot = await rallyStore.getSnapshot()
+        const isAdmin = Boolean(user && isUserAdmin(user.username))
+        const snapshot = await rallyStore.getSnapshot(isAdmin)
         sendResponse(res, jsonResponse(200, snapshot))
         return
       }
@@ -333,6 +334,39 @@ const server = createServer(async (req, res) => {
           sendResponse(res, jsonResponse(result.success ? 200 : 400, result))
           return
         }
+      }
+
+      // 14. 获取管理员控制面板详情配置
+      if (isGetOrHead && pathname === '/api/v1/admin/settings') {
+        if (!user || !isUserAdmin(user.username)) {
+          sendResponse(res, jsonResponse(403, { error: '无权操作，仅系统管理员可访问管理面板' }))
+          return
+        }
+        const settings = rallyStore.getAdminSettingsDetails()
+        sendResponse(res, jsonResponse(200, settings))
+        return
+      }
+
+      // 15. 管理员增删管理员账号
+      if (req.method === 'POST' && pathname === '/api/v1/admin/settings/admins') {
+        if (!user || !isUserAdmin(user.username)) {
+          sendResponse(res, jsonResponse(403, { error: '无权操作，仅系统管理员可配置管理员权限' }))
+          return
+        }
+        const body = await parseJsonBody(req)
+        const targetUsername = String(body.username || '').trim()
+        const action = body.action === 'remove' ? 'remove' : 'add'
+        if (!targetUsername) {
+          sendResponse(res, jsonResponse(400, { error: '请提供要操作的员工工号或账号' }))
+          return
+        }
+
+        const result = action === 'add'
+          ? rallyStore.addAdmin(targetUsername)
+          : rallyStore.removeAdmin(targetUsername, user.username)
+
+        sendResponse(res, jsonResponse(result.success ? 200 : 400, result))
+        return
       }
 
       sendResponse(res, jsonResponse(404, { error: 'API 未找到' }))

@@ -73,6 +73,12 @@ export const api = {
         reason: data?.reason,
       }),
     }),
+  getAdminSettings: () => request<import('./types.ts').AdminSettingsData>('/admin/settings'),
+  updateAdminUser: (username: string, action: 'add' | 'remove') =>
+    request<{ success: boolean; message: string; admins: import('./types.ts').AdminItem[] }>('/admin/settings/admins', {
+      method: 'POST',
+      body: JSON.stringify({ username, action }),
+    }),
   getExportUrl: () => `${API_BASE}/export/excel`,
   getOidcLoginUrl: () => `${API_BASE}/auth/oidc/login`,
   getLogoutUrl: () => `${API_BASE}/auth/logout`,

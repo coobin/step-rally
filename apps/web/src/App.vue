@@ -4,6 +4,7 @@ import Navbar from './components/Navbar.vue'
 import TeamCard from './components/TeamCard.vue'
 import TeamModal from './components/TeamModal.vue'
 import UnassignedList from './components/UnassignedList.vue'
+import AdminModal from './components/AdminModal.vue'
 import { api } from './api.ts'
 import type { MeResponse, SnapshotData, TeamItem, LdapEmployee } from './types.ts'
 
@@ -12,6 +13,7 @@ const snapshot = ref<SnapshotData | null>(null)
 const loading = ref(true)
 
 const activeTeam = ref<TeamItem | null>(null)
+const showAdminSettings = ref(false)
 const mobileTab = ref<'teams' | 'unassigned'>('teams')
 
 // Toast 提示
@@ -187,6 +189,7 @@ onUnmounted(() => {
       :snapshot="snapshot"
       @refresh="loadData"
       @leave-team="handleLeaveTeam()"
+      @open-admin-settings="showAdminSettings = true"
     />
 
     <main class="container py-6 flex-1 relative z-10">
@@ -239,7 +242,7 @@ onUnmounted(() => {
                 <span class="text-amber-300 font-bold font-mono">
                   ({{ snapshot.statistics.totalMembers }} / {{ snapshot.statistics.eligibleEmployeesCount ?? snapshot.statistics.totalCompanyEmployees }} 人)
                 </span>
-                <span v-if="snapshot.statistics.excludedCount" class="text-white/70 text-[11px]">
+                <span v-if="me?.user?.isAdmin && snapshot.statistics.excludedCount" class="text-white/70 text-[11px]">
                   · 应参 {{ snapshot.statistics.eligibleEmployeesCount }} 人 · 免报 {{ snapshot.statistics.excludedCount }} 人
                 </span>
               </div>
@@ -271,7 +274,7 @@ onUnmounted(() => {
               <span class="text-xs font-normal text-slate-400">人</span>
             </div>
             <div class="text-[11px] text-slate-400 mt-0.5">
-              <span v-if="snapshot.statistics.excludedCount">
+              <span v-if="me?.user?.isAdmin && snapshot.statistics.excludedCount">
                 应参赛 {{ snapshot.statistics.eligibleEmployeesCount }} 人 (免报 {{ snapshot.statistics.excludedCount }} 人)
               </span>
               <span v-else>全员真实花名册 · 10 队协同</span>
@@ -302,7 +305,7 @@ onUnmounted(() => {
               <span class="text-xs font-normal text-slate-400">人</span>
             </div>
             <div class="text-[11px] text-amber-700/80 mt-0.5 font-medium">
-              <span v-if="snapshot.statistics.excludedCount">已免报名 {{ snapshot.statistics.excludedCount }} 人</span>
+              <span v-if="me?.user?.isAdmin && snapshot.statistics.excludedCount">已免报名 {{ snapshot.statistics.excludedCount }} 人</span>
               <span v-else>右侧名册支持一键入队</span>
             </div>
           </div>
@@ -402,6 +405,16 @@ onUnmounted(() => {
       :team="activeTeam"
       :me="me"
       @close="activeTeam = null"
+      @refresh="loadData"
+      @toast="showToast"
+    />
+
+    <!-- 管理员设置中心弹窗 -->
+    <AdminModal
+      v-if="showAdminSettings"
+      :me="me"
+      :snapshot="snapshot"
+      @close="showAdminSettings = false"
       @refresh="loadData"
       @toast="showToast"
     />
