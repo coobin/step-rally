@@ -1,0 +1,33 @@
+{
+  "name": "step-rally",
+  "private": true,
+  "version": "1.0.0",
+  "description": "企业健步拉练与毅行挑战组队系统 / Corporate Walking Rally & Team Formation System",
+  "license": "MIT",
+  "keywords": [
+    "rally",
+    "walking-challenge",
+    "team-formation",
+    "captain-voting",
+    "sports",
+    "oidc",
+    "ldap",
+    "vue3",
+    "typescript"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "npm --workspace apps/web run dev",
+    "api:dev": "npm --workspace apps/api run dev",
+    "build": "npm --workspace apps/web run build && npm --workspace apps/api run build",
+    "build:api": "npm --workspace apps/api run build",
+    "start": "npm --workspace apps/api run start"
+  },
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

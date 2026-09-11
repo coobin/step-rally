@@ -1,0 +1,35 @@
+name: red-walk-rally
+
+services:
+  red-walk-rally:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: red-walk-rally:latest
+    container_name: red-walk-rally
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      BIND_HOST: 0.0.0.0
+      PORT: 8095
+      PUBLIC_DIR: /app/public
+      DATA_FILE: /app/data/rally.json
+      TZ: Asia/Shanghai
+    ports:
+      - "${HOST_PORT:-8095}:8095"
+    volumes:
+      - rally_data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8095/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  rally_data:

@@ -1,0 +1,7 @@
+node_modules
+apps/web/node_modules
+apps/api/node_modules
+data
+.git
+.DS_Store
+dist
