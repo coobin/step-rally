@@ -1,5 +1,17 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  openSync,
+  fsyncSync,
+  closeSync,
+  copyFileSync,
+  readdirSync,
+  unlinkSync,
+} from 'node:fs'
+import { dirname, resolve, join } from 'node:path'
 import { appConfig } from './config.ts'
 
 export interface TeamMember {
@@ -8,6 +20,7 @@ export interface TeamMember {
   joinedAt: string
   mobile?: string
   note?: string
+  department?: string
 }
 
 export interface TeamVoteCount {
@@ -81,23 +94,48 @@ export class RallyStore {
   }
 
   private loadOrCreate(): RallyState {
-    try {
-      if (existsSync(this.filePath)) {
-        const raw = readFileSync(this.filePath, 'utf-8')
-        const parsed = JSON.parse(raw) as RallyState
-        if (parsed && Array.isArray(parsed.teams) && parsed.teams.length === 10) {
-          if (!Array.isArray(parsed.excludedUsers)) {
-            parsed.excludedUsers = []
-          }
-          if (!Array.isArray(parsed.adminUsernames)) {
-            parsed.adminUsernames = []
-          }
-          return parsed
+    // 候选文件依次尝试：主文件 -> .bak 备份 -> 历史快照目录最新文件
+    const candidateFiles: string[] = [this.filePath, `${this.filePath}.bak`]
+    const dir = dirname(this.filePath)
+    const backupDir = join(dir, 'backups')
+    if (existsSync(backupDir)) {
+      try {
+        const snapshots = readdirSync(backupDir)
+          .filter((f) => f.startsWith('rally-') && f.endsWith('.json'))
+          .sort()
+          .reverse()
+        if (snapshots.length > 0) {
+          candidateFiles.push(join(backupDir, snapshots[0]))
         }
-      }
-    } catch (err) {
-      console.warn('读取现有存储文件异常，将初始化新数据:', err)
+      } catch {}
     }
+
+    for (const file of candidateFiles) {
+      try {
+        if (existsSync(file)) {
+          const raw = readFileSync(file, 'utf-8')
+          const parsed = JSON.parse(raw) as RallyState
+          if (parsed && Array.isArray(parsed.teams) && parsed.teams.length === 10) {
+            if (!Array.isArray(parsed.excludedUsers)) {
+              parsed.excludedUsers = []
+            }
+            if (!Array.isArray(parsed.adminUsernames)) {
+              parsed.adminUsernames = []
+            }
+            if (file !== this.filePath) {
+              console.warn(`⚠️ 主数据文件缺失或损坏，已成功从备份文件恢复数据: ${file}`)
+              // 自动修复主数据文件
+              this.saveState(parsed)
+            }
+            return parsed
+          }
+        }
+      } catch (err) {
+        console.warn(`读取数据文件 ${file} 异常:`, err)
+      }
+    }
+
+    console.warn('未找到有效的数据文件或备份，将初始化默认战队数据')
 
     const defaultState: RallyState = {
       title: '一步一善 · 重走经典红色路',
@@ -136,9 +174,70 @@ export class RallyStore {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
     }
+
+    const jsonContent = JSON.stringify(stateToSave, null, 2)
     const tempFile = `${this.filePath}.tmp.${Date.now()}`
-    writeFileSync(tempFile, JSON.stringify(stateToSave, null, 2), 'utf-8')
-    renameSync(tempFile, this.filePath)
+
+    try {
+      // 1. 写入临时文件并通过 fsyncSync 强制写入物理硬件扇区，杜绝内存未落盘风险
+      const fd = openSync(tempFile, 'w')
+      writeFileSync(fd, jsonContent, 'utf-8')
+      fsyncSync(fd)
+      closeSync(fd)
+
+      // 2. 备份现有主数据文件为 .bak
+      if (existsSync(this.filePath)) {
+        try {
+          copyFileSync(this.filePath, `${this.filePath}.bak`)
+        } catch (e) {
+          console.warn('备份主数据文件为 .bak 异常:', e)
+        }
+      }
+
+      // 3. 原子重命名生效
+      renameSync(tempFile, this.filePath)
+
+      // 4. 实时快照归档 (滚动保留最新 100 份历史快照，支持时间点任意灾难恢复)
+      try {
+        const backupDir = join(dir, 'backups')
+        if (!existsSync(backupDir)) {
+          mkdirSync(backupDir, { recursive: true })
+        }
+        const now = new Date()
+        const dateTag = now.toISOString().replace(/[:.]/g, '-')
+        const snapshotFile = join(backupDir, `rally-${dateTag}.json`)
+        writeFileSync(snapshotFile, jsonContent, 'utf-8')
+
+        const snapshotList = readdirSync(backupDir)
+          .filter((f) => f.startsWith('rally-') && f.endsWith('.json'))
+          .sort()
+        if (snapshotList.length > 100) {
+          for (const oldFile of snapshotList.slice(0, snapshotList.length - 100)) {
+            try {
+              unlinkSync(join(backupDir, oldFile))
+            } catch {}
+          }
+        }
+      } catch (backupErr) {
+        console.warn('历史快照归档警告:', backupErr)
+      }
+
+      // 5. 宿主机双重实时存储目录同步（若挂载了 /app/host_backups）
+      const hostBackupDirs = ['/app/host_backups', '/app/data_backups']
+      for (const hDir of hostBackupDirs) {
+        if (existsSync(hDir)) {
+          try {
+            writeFileSync(join(hDir, 'rally_realtime.json'), jsonContent, 'utf-8')
+            writeFileSync(join(hDir, 'rally_latest.json'), jsonContent, 'utf-8')
+          } catch (hErr) {
+            console.warn(`同步至宿主机目录 ${hDir} 警告:`, hErr)
+          }
+        }
+      }
+    } catch (err) {
+      console.error('CRITICAL: 持久化保存报名数据发生异常:', err)
+      throw err
+    }
   }
 
   // 计算队伍推举得票统计
@@ -216,6 +315,31 @@ export class RallyStore {
 
   // 获取当前系统所有报名情况及状态（结合 LDAP 全体在职员工）
   public async getSnapshot(isAdmin = false) {
+    let allEmployees: import('./ldap.ts').LdapEmployee[] = []
+    try {
+      allEmployees = await (await import('./ldap.ts')).fetchLdapEmployees()
+    } catch (e) {
+      console.warn('获取 LDAP 员工失败:', e)
+    }
+
+    // 结合 LDAP 员工信息丰富免报名名单的部门和姓名
+    const employeeMap = new Map(allEmployees.map((e) => [e.username.toLowerCase(), e]))
+
+    // 自动将队伍中现有成员的部门校准为标准的 1 级部门
+    let teamsDepartmentUpdated = false
+    for (const t of this.state.teams) {
+      for (const m of t.members) {
+        const emp = employeeMap.get(m.username.toLowerCase())
+        if (emp && emp.department && m.department !== emp.department) {
+          m.department = emp.department
+          teamsDepartmentUpdated = true
+        }
+      }
+    }
+    if (teamsDepartmentUpdated) {
+      this.saveState()
+    }
+
     const teams = this.getTeamsSummary()
     const registeredUsernames = new Set<string>()
     for (const t of teams) {
@@ -227,15 +351,6 @@ export class RallyStore {
     const excludedUsers = this.state.excludedUsers || []
     const excludedUsernamesSet = new Set(excludedUsers.map((u) => u.username.toLowerCase()))
 
-    let allEmployees: import('./ldap.ts').LdapEmployee[] = []
-    try {
-      allEmployees = await (await import('./ldap.ts')).fetchLdapEmployees()
-    } catch (e) {
-      console.warn('获取 LDAP 员工失败:', e)
-    }
-
-    // 结合 LDAP 员工信息丰富免报名名单的部门和姓名
-    const employeeMap = new Map(allEmployees.map((e) => [e.username.toLowerCase(), e]))
     const enrichedExcludedEmployees: ExcludedUser[] = excludedUsers.map((u) => {
       const emp = employeeMap.get(u.username.toLowerCase())
       return {
@@ -304,7 +419,7 @@ export class RallyStore {
   // 用户加入队伍
   public joinTeam(
     teamId: number,
-    user: { username: string; displayName: string },
+    user: { username: string; displayName: string; department?: string },
     options?: { mobile?: string; note?: string; switchTeam?: boolean },
   ): { success: boolean; message: string; team?: Team } {
     const existing = this.findUserTeam(user.username)
@@ -337,6 +452,7 @@ export class RallyStore {
     const newMember: TeamMember = {
       username: user.username,
       displayName: user.displayName || user.username,
+      department: user.department,
       joinedAt: new Date().toISOString(),
       mobile: options?.mobile?.trim() || undefined,
       note: options?.note?.trim() || undefined,

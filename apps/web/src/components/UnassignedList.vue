@@ -56,6 +56,10 @@ const filteredEmployees = computed(() => {
   })
 })
 
+function getDeptCount(dept: string): number {
+  return props.employees.filter((emp) => emp.department === dept).length
+}
+
 // 过滤已免报名同事
 const filteredExcluded = computed(() => {
   const list = props.excludedEmployees || []
@@ -190,7 +194,7 @@ function handleRestore(username: string) {
           :class="selectedDept === dept ? 'bg-slate-800 text-white font-medium' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'"
           @click="selectedDept = dept"
         >
-          {{ dept }}
+          {{ dept }} ({{ getDeptCount(dept) }})
         </button>
       </div>
     </div>

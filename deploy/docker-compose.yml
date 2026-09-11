@@ -20,6 +20,7 @@ services:
       - "${HOST_PORT:-8095}:8095"
     volumes:
       - rally_data:/app/data
+      - ../data_backups:/app/host_backups
     healthcheck:
       test:
         - CMD
