@@ -23,6 +23,19 @@ const selectedDept = ref('全部')
 const excludeModalTarget = ref<{ username: string; displayName: string; department?: string } | null>(null)
 const excludeReason = ref('')
 
+// 邀请入队确认弹窗
+const inviteModalTarget = ref<LdapEmployee | null>(null)
+
+function openInviteModal(emp: LdapEmployee) {
+  inviteModalTarget.value = emp
+}
+
+function handleConfirmInvite() {
+  if (!inviteModalTarget.value) return
+  emit('invite-to-my-team', inviteModalTarget.value)
+  inviteModalTarget.value = null
+}
+
 // 手动输入账号设为免报名弹窗
 const showManualModal = ref(false)
 const manualUsername = ref('')
@@ -253,8 +266,8 @@ function handleRestore(username: string) {
             <button
               v-if="canInvite && emp.username !== me?.user?.username"
               class="btn btn-secondary text-[11px] px-2.5 py-1 hover:border-red-400 hover:bg-red-50 hover:text-red-700 font-medium transition"
-              :title="`将 ${emp.displayName} 邀入【${me?.myTeam?.name}】`"
-              @click="emit('invite-to-my-team', emp)"
+              :title="`邀请 ${emp.displayName} 加入【${me?.myTeam?.name}】`"
+              @click="openInviteModal(emp)"
             >
               + 邀入
             </button>
@@ -412,6 +425,57 @@ function handleRestore(username: string) {
             @click="handleManualExclude"
           >
             确认添加
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗 3：邀请/拉入队伍二次确认 -->
+    <div
+      v-if="inviteModalTarget"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
+      @click.self="inviteModalTarget = null"
+    >
+      <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-5 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+            <span>🤝</span>
+            <span>邀请队员入队确认</span>
+          </h4>
+          <button class="text-slate-400 hover:text-slate-600 text-xs" @click="inviteModalTarget = null">✕</button>
+        </div>
+
+        <div class="bg-slate-50 rounded-lg p-3 border border-slate-100 mb-3 space-y-1.5 text-xs">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">邀请同事:</span>
+            <span class="font-bold text-slate-900">{{ inviteModalTarget.displayName }} ({{ inviteModalTarget.username }})</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">所属部门:</span>
+            <span class="text-slate-700">{{ inviteModalTarget.department }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">加入战队:</span>
+            <span class="font-bold text-red-700">【第 {{ me?.myTeam?.id }} 队】{{ me?.myTeam?.name }}</span>
+          </div>
+        </div>
+
+        <p class="text-xs text-slate-600 mb-4 leading-relaxed">
+          确认要将 <strong class="text-slate-900 font-bold">【{{ inviteModalTarget.displayName }}】</strong> 邀请加入您的战队吗？加入后 TA 将成为本队正式队员。
+        </p>
+
+        <div class="flex justify-end gap-2 text-xs">
+          <button
+            class="px-3.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
+            @click="inviteModalTarget = null"
+          >
+            取消
+          </button>
+          <button
+            class="btn btn-primary px-4 py-1.5 text-xs font-semibold shadow-sm"
+            @click="handleConfirmInvite"
+          >
+            确认加入本队
           </button>
         </div>
       </div>
