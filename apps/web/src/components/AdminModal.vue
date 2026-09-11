@@ -28,15 +28,41 @@ const manualDisplayName = ref('')
 const manualReason = ref('')
 const submittingExcluded = ref(false)
 
+// 队伍上限设置
+const capacityInput = ref(15)
+const savingCapacity = ref(false)
+
 async function fetchSettings() {
   try {
     loading.value = true
     const data = await api.getAdminSettings()
     settings.value = data
+    if (data?.activityRules?.maxPerTeam) {
+      capacityInput.value = data.activityRules.maxPerTeam
+    }
   } catch (err: any) {
     emit('toast', err.message || '加载管理员配置失败', 'error')
   } finally {
     loading.value = false
+  }
+}
+
+async function handleSaveGlobalCapacity() {
+  const num = Math.floor(Number(capacityInput.value))
+  if (!num || num < 1 || num > 100) {
+    emit('toast', '每队上限人数必须在 1 到 100 之间', 'error')
+    return
+  }
+  try {
+    savingCapacity.value = true
+    const res = await api.updateTeamCapacity(num)
+    emit('toast', res.message || `每队人数上限已统一设置为 ${num} 人`, 'success')
+    await fetchSettings()
+    emit('refresh')
+  } catch (err: any) {
+    emit('toast', err.message || '更新队伍人数上限失败', 'error')
+  } finally {
+    savingCapacity.value = false
   }
 }
 
@@ -386,11 +412,59 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Tab 3: 战队管理与重置 -->
-        <div v-else-if="activeTab === 'teams'" class="space-y-3">
-          <p class="text-xs text-slate-500">
-            管理员可以一键重置清空某个小队（清除该小队所有成员及投票选票），释放队员名额重新组队。
-          </p>
+        <!-- Tab 3: 战队管理与人数上限设置 -->
+        <div v-else-if="activeTab === 'teams'" class="space-y-4">
+          <!-- 全局每队人数上限设置 -->
+          <div class="p-4 bg-gradient-to-r from-slate-50 to-amber-50/50 rounded-xl border border-slate-200 shadow-2xs">
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <h4 class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <span>⚡</span>
+                <span>每队人数上限设置</span>
+              </h4>
+              <span class="text-xs font-mono font-bold text-red-700 bg-red-100/70 border border-red-200 px-2 py-0.5 rounded-full">
+                当前上限: {{ settings?.activityRules?.maxPerTeam || 15 }} 人/队
+              </span>
+            </div>
+            <p class="text-[11px] text-slate-500 mb-3">
+              统一调整全公司 10 支战队的人数容量上限（队伍满员后将禁止继续报名）。请确保新上限不低于已有队伍当前已集结人数。
+            </p>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-xs text-slate-400">快速设置:</span>
+              <button
+                v-for="num in [12, 14, 15, 16, 18, 20]"
+                :key="num"
+                class="text-xs px-2.5 py-1 rounded-lg border transition font-medium"
+                :class="capacityInput === num ? 'bg-red-700 text-white border-red-700' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'"
+                @click="capacityInput = num"
+              >
+                {{ num }} 人
+              </button>
+
+              <div class="flex items-center gap-1.5 ml-auto">
+                <input
+                  v-model.number="capacityInput"
+                  type="number"
+                  min="1"
+                  max="100"
+                  class="w-20 text-xs px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-center font-bold focus:outline-none focus:border-red-600"
+                />
+                <span class="text-xs text-slate-500">人</span>
+                <button
+                  class="btn btn-primary text-xs px-3.5 py-1.5 font-medium ml-1"
+                  :disabled="savingCapacity || !capacityInput"
+                  @click="handleSaveGlobalCapacity"
+                >
+                  {{ savingCapacity ? '保存中...' : '保存设置' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold text-slate-800">各代表队概况与小队清空</h4>
+            <span class="text-[11px] text-slate-400">支持一键重置清空某个小队重新组队</span>
+          </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div

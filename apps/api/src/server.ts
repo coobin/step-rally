@@ -369,6 +369,25 @@ const server = createServer(async (req, res) => {
         return
       }
 
+      // 16. 管理员设置队伍人数上限
+      if (req.method === 'POST' && pathname === '/api/v1/admin/settings/team-capacity') {
+        if (!user || !isUserAdmin(user.username)) {
+          sendResponse(res, jsonResponse(403, { error: '无权操作，仅系统管理员可设置队伍人数上限' }))
+          return
+        }
+        const body = await parseJsonBody(req)
+        const maxMembers = Number(body.maxMembers)
+        const teamId = body.teamId ? Number(body.teamId) : undefined
+        if (!maxMembers || maxMembers < 1) {
+          sendResponse(res, jsonResponse(400, { error: '请输入合法的队伍人数上限' }))
+          return
+        }
+
+        const result = rallyStore.updateTeamCapacity(maxMembers, teamId)
+        sendResponse(res, jsonResponse(result.success ? 200 : 400, result))
+        return
+      }
+
       sendResponse(res, jsonResponse(404, { error: 'API 未找到' }))
       return
     }

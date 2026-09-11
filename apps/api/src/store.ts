@@ -613,6 +613,70 @@ export class RallyStore {
       admins: this.getAdminSettingsDetails().admins,
     }
   }
+
+  // 设置每队人数上限（统一设置所有队伍，或支持单独设置某队伍）
+  public updateTeamCapacity(
+    maxMembers: number,
+    teamId?: number,
+  ): { success: boolean; message: string; maxPerTeam: number } {
+    const limit = Math.floor(Number(maxMembers))
+    if (!Number.isFinite(limit) || limit < 1 || limit > 100) {
+      return {
+        success: false,
+        message: '每队人数上限必须是 1 到 100 之间的整数',
+        maxPerTeam: this.state.activityRules.maxPerTeam,
+      }
+    }
+
+    // 若指定了具体队伍
+    if (teamId) {
+      const team = this.state.teams.find((t) => t.id === teamId)
+      if (!team) {
+        return {
+          success: false,
+          message: '指定队伍不存在',
+          maxPerTeam: this.state.activityRules.maxPerTeam,
+        }
+      }
+      if (team.members.length > limit) {
+        return {
+          success: false,
+          message: `【${team.name}】当前已有 ${team.members.length} 人，上限人数不能低于已有成员数`,
+          maxPerTeam: this.state.activityRules.maxPerTeam,
+        }
+      }
+      team.maxMembers = limit
+      this.saveState()
+      return {
+        success: true,
+        message: `已将【${team.name}】的人数上限调整为 ${limit} 人`,
+        maxPerTeam: this.state.activityRules.maxPerTeam,
+      }
+    }
+
+    // 全局统一调整
+    const overflowingTeams = this.state.teams.filter((t) => t.members.length > limit)
+    if (overflowingTeams.length > 0) {
+      const names = overflowingTeams.map((t) => `【${t.name}】(${t.members.length}人)`).join('、')
+      return {
+        success: false,
+        message: `无法将全局上限设为 ${limit} 人，因为 ${names} 的现有成员数已超过该上限`,
+        maxPerTeam: this.state.activityRules.maxPerTeam,
+      }
+    }
+
+    this.state.activityRules.maxPerTeam = limit
+    for (const team of this.state.teams) {
+      team.maxMembers = limit
+    }
+    this.saveState()
+
+    return {
+      success: true,
+      message: `已成功将各队人数上限统一设置为 ${limit} 人`,
+      maxPerTeam: limit,
+    }
+  }
 }
 
 export const rallyStore = new RallyStore()

@@ -230,7 +230,7 @@ onUnmounted(() => {
               <span>一步一善 · 重走经典红色路</span>
             </h2>
             <p class="text-xs sm:text-sm text-red-100/90 mt-1.5 font-normal leading-relaxed">
-              让行走更有意义，为乡村孩子送去优质课堂！全公司组建 <strong class="text-amber-300 font-bold">10 支战队</strong>，每队上限 <strong class="text-amber-300 font-bold">15 人</strong>，队内一人一票推选领跑队长。
+              让行走更有意义，为乡村孩子送去优质课堂！全公司组建 <strong class="text-amber-300 font-bold">10 支战队</strong>，每队上限 <strong class="text-amber-300 font-bold">{{ snapshot.activityRules.maxPerTeam }} 人</strong>，队内一人一票推选领跑队长。
             </p>
           </div>
 
@@ -320,7 +320,7 @@ onUnmounted(() => {
               {{ snapshot.teams.filter(t => t.currentLeader).length }}
               <span class="text-xs font-normal text-slate-400">/ 10 队</span>
             </div>
-            <div class="text-[11px] text-slate-400 mt-0.5">满编 15 人队伍 {{ snapshot.statistics.fullTeamsCount }} 支</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">满编 {{ snapshot.activityRules?.maxPerTeam || 15 }} 人队伍 {{ snapshot.statistics.fullTeamsCount }} 支</div>
           </div>
         </div>
       </div>
@@ -353,7 +353,7 @@ onUnmounted(() => {
           <div class="flex items-center justify-between">
             <h3 class="font-bold text-sm text-slate-800 flex items-center gap-2">
               <span>🚩</span>
-              <span>十支代表队 (每队上限 15 人)</span>
+              <span>十支代表队 (每队上限 {{ snapshot?.activityRules?.maxPerTeam || 15 }} 人)</span>
             </h3>
             <span class="text-xs text-slate-400">点击队伍进入推选队长</span>
           </div>
