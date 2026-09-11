@@ -58,6 +58,21 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ teamId }),
     }),
+  adminExcludeUser: (
+    username: string,
+    action: 'exclude' | 'restore',
+    data?: { displayName?: string; department?: string; reason?: string },
+  ) =>
+    request<{ success: boolean; message: string }>('/admin/exclude-user', {
+      method: 'POST',
+      body: JSON.stringify({
+        username,
+        action,
+        displayName: data?.displayName,
+        department: data?.department,
+        reason: data?.reason,
+      }),
+    }),
   getExportUrl: () => `${API_BASE}/export/excel`,
   getOidcLoginUrl: () => `${API_BASE}/auth/oidc/login`,
   getLogoutUrl: () => `${API_BASE}/auth/logout`,

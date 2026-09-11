@@ -303,6 +303,38 @@ const server = createServer(async (req, res) => {
         return
       }
 
+      // 13. 管理员手动排除/恢复人员报名资格
+      if (req.method === 'POST' && pathname === '/api/v1/admin/exclude-user') {
+        if (!user || !isUserAdmin(user.username)) {
+          sendResponse(res, jsonResponse(403, { error: '无权操作，仅系统管理员可设置免报名人员' }))
+          return
+        }
+        const body = await parseJsonBody(req)
+        const username = String(body.username || '').trim()
+        const action = body.action === 'restore' ? 'restore' : 'exclude'
+        if (!username) {
+          sendResponse(res, jsonResponse(400, { error: '请指定要操作的员工工号/账号' }))
+          return
+        }
+
+        if (action === 'restore') {
+          const result = rallyStore.restoreUser(username)
+          sendResponse(res, jsonResponse(result.success ? 200 : 400, result))
+          return
+        } else {
+          const displayName = body.displayName ? String(body.displayName).trim() : undefined
+          const department = body.department ? String(body.department).trim() : undefined
+          const reason = body.reason ? String(body.reason).trim() : undefined
+          const result = rallyStore.excludeUser(
+            { username, displayName, department },
+            reason,
+            user.username,
+          )
+          sendResponse(res, jsonResponse(result.success ? 200 : 400, result))
+          return
+        }
+      }
+
       sendResponse(res, jsonResponse(404, { error: 'API 未找到' }))
       return
     }

@@ -101,6 +101,35 @@ async function handleInviteToMyTeam(emp: LdapEmployee) {
   }
 }
 
+// 管理员排除员工（免报名）
+async function handleExcludeUser(
+  emp: { username: string; displayName?: string; department?: string },
+  reason?: string,
+) {
+  try {
+    const res = await api.adminExcludeUser(emp.username, 'exclude', {
+      displayName: emp.displayName,
+      department: emp.department,
+      reason: reason || '免参与健步拉练',
+    })
+    showToast(res.message || `已将【${emp.displayName || emp.username}】设为免报名`, 'success')
+    await loadData()
+  } catch (err: any) {
+    showToast(err.message || '操作失败', 'error')
+  }
+}
+
+// 管理员恢复员工报名资格
+async function handleRestoreUser(username: string) {
+  try {
+    const res = await api.adminExcludeUser(username, 'restore')
+    showToast(res.message || '已恢复该员工的报名资格', 'success')
+    await loadData()
+  } catch (err: any) {
+    showToast(err.message || '操作失败', 'error')
+  }
+}
+
 let refreshTimer: any = null
 
 onMounted(async () => {
@@ -207,7 +236,12 @@ onUnmounted(() => {
             <div class="flex items-center justify-between text-xs mb-1.5">
               <div class="flex items-center gap-1.5 text-white/90 font-medium">
                 <span>🏃 全员组队集结进度</span>
-                <span class="text-amber-300 font-bold font-mono">({{ snapshot.statistics.totalMembers }} / {{ snapshot.statistics.totalCompanyEmployees }} 人)</span>
+                <span class="text-amber-300 font-bold font-mono">
+                  ({{ snapshot.statistics.totalMembers }} / {{ snapshot.statistics.eligibleEmployeesCount ?? snapshot.statistics.totalCompanyEmployees }} 人)
+                </span>
+                <span v-if="snapshot.statistics.excludedCount" class="text-white/70 text-[11px]">
+                  · 应参 {{ snapshot.statistics.eligibleEmployeesCount }} 人 · 免报 {{ snapshot.statistics.excludedCount }} 人
+                </span>
               </div>
               <div class="text-amber-300 font-black font-mono text-sm">
                 {{ snapshot.statistics.registrationRate }}%
@@ -236,7 +270,12 @@ onUnmounted(() => {
               {{ snapshot.statistics.totalCompanyEmployees }}
               <span class="text-xs font-normal text-slate-400">人</span>
             </div>
-            <div class="text-[11px] text-slate-400 mt-0.5">全员真实花名册 · 10 队协同</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">
+              <span v-if="snapshot.statistics.excludedCount">
+                应参赛 {{ snapshot.statistics.eligibleEmployeesCount }} 人 (免报 {{ snapshot.statistics.excludedCount }} 人)
+              </span>
+              <span v-else>全员真实花名册 · 10 队协同</span>
+            </div>
           </div>
 
           <!-- 已组队报名人数 -->
@@ -247,7 +286,7 @@ onUnmounted(() => {
             </div>
             <div class="text-2xl font-black text-red-700 mt-1 font-mono">
               {{ snapshot.statistics.totalMembers }}
-              <span class="text-xs font-normal text-slate-400">/ {{ snapshot.statistics.totalCompanyEmployees }} 人</span>
+              <span class="text-xs font-normal text-slate-400">/ {{ snapshot.statistics.eligibleEmployeesCount ?? snapshot.statistics.totalCompanyEmployees }} 人</span>
             </div>
             <div class="text-[11px] text-red-600/80 mt-0.5 font-medium">集结率 {{ snapshot.statistics.registrationRate }}%</div>
           </div>
@@ -262,7 +301,10 @@ onUnmounted(() => {
               {{ snapshot.statistics.unassignedCount }}
               <span class="text-xs font-normal text-slate-400">人</span>
             </div>
-            <div class="text-[11px] text-amber-700/80 mt-0.5 font-medium">右侧名册支持一键入队</div>
+            <div class="text-[11px] text-amber-700/80 mt-0.5 font-medium">
+              <span v-if="snapshot.statistics.excludedCount">已免报名 {{ snapshot.statistics.excludedCount }} 人</span>
+              <span v-else>右侧名册支持一键入队</span>
+            </div>
           </div>
 
           <!-- 已决出队长 -->
@@ -338,9 +380,12 @@ onUnmounted(() => {
           <UnassignedList
             v-if="snapshot"
             :employees="snapshot.unassignedEmployees"
+            :excluded-employees="snapshot.excludedEmployees"
             :departments="snapshot.departments"
             :me="me"
             @invite-to-my-team="handleInviteToMyTeam"
+            @exclude-user="handleExcludeUser"
+            @restore-user="handleRestoreUser"
           />
         </div>
       </div>
@@ -348,7 +393,7 @@ onUnmounted(() => {
 
     <!-- 极简页脚 -->
     <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400 mt-auto">
-      <p>StepRally 健步出征 · 团队健步挑战与队长推选系统 2026</p>
+      <p>承希科技 · 一步一善 经典红色路公益健步活动 2026</p>
     </footer>
 
     <!-- 队伍详情与投票弹窗 -->

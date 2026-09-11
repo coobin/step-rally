@@ -59,6 +59,21 @@ export async function generateRallyExcelBuffer(): Promise<Buffer> {
     })
   }
 
+  // 免报名同事
+  const excludedRows: Array<Record<string, any>> = []
+  let eIndex = 1
+  for (const e of (snapshot as any).excludedEmployees || []) {
+    excludedRows.push({
+      '序号': eIndex++,
+      '姓名': e.displayName,
+      '工号/账号': e.username,
+      '所属部门': e.department || '-',
+      '免报原因': e.reason || '免参与健步拉练',
+      '设置时间': e.excludedAt ? new Date(e.excludedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '-',
+      '操作人': e.excludedBy || '系统管理员',
+    })
+  }
+
   const wb = XLSX.utils.book_new()
 
   // Sheet 1: 队员花名册
@@ -72,6 +87,10 @@ export async function generateRallyExcelBuffer(): Promise<Buffer> {
   // Sheet 3: 未报名同事
   const wsUnassigned = XLSX.utils.json_to_sheet(unassignedRows)
   XLSX.utils.book_append_sheet(wb, wsUnassigned, '待组队同事名单')
+
+  // Sheet 4: 免报名同事
+  const wsExcluded = XLSX.utils.json_to_sheet(excludedRows)
+  XLSX.utils.book_append_sheet(wb, wsExcluded, '免报名人员名单')
 
   const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
   return excelBuffer as Buffer

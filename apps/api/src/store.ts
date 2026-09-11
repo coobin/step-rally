@@ -32,6 +32,15 @@ export interface Team {
   lockedLeaderUsername?: string
 }
 
+export interface ExcludedUser {
+  username: string
+  displayName: string
+  department?: string
+  reason?: string
+  excludedAt: string
+  excludedBy?: string
+}
+
 export interface RallyState {
   title: string
   theme: string
@@ -44,6 +53,7 @@ export interface RallyState {
     totalKmTarget: number
   }
   teams: Team[]
+  excludedUsers?: ExcludedUser[]
   updatedAt: string
 }
 
@@ -75,6 +85,9 @@ export class RallyStore {
         const raw = readFileSync(this.filePath, 'utf-8')
         const parsed = JSON.parse(raw) as RallyState
         if (parsed && Array.isArray(parsed.teams) && parsed.teams.length === 10) {
+          if (!Array.isArray(parsed.excludedUsers)) {
+            parsed.excludedUsers = []
+          }
           return parsed
         }
       }
@@ -104,6 +117,7 @@ export class RallyStore {
         members: [],
         votes: {},
       })),
+      excludedUsers: [],
       updatedAt: new Date().toISOString(),
     }
 
@@ -205,6 +219,9 @@ export class RallyStore {
       }
     }
 
+    const excludedUsers = this.state.excludedUsers || []
+    const excludedUsernamesSet = new Set(excludedUsers.map((u) => u.username.toLowerCase()))
+
     let allEmployees: import('./ldap.ts').LdapEmployee[] = []
     try {
       allEmployees = await (await import('./ldap.ts')).fetchLdapEmployees()
@@ -212,9 +229,22 @@ export class RallyStore {
       console.warn('获取 LDAP 员工失败:', e)
     }
 
-    // 计算未报名的员工
+    // 结合 LDAP 员工信息丰富免报名名单的部门和姓名
+    const employeeMap = new Map(allEmployees.map((e) => [e.username.toLowerCase(), e]))
+    const enrichedExcludedEmployees: ExcludedUser[] = excludedUsers.map((u) => {
+      const emp = employeeMap.get(u.username.toLowerCase())
+      return {
+        ...u,
+        displayName: emp?.displayName || u.displayName,
+        department: emp?.department || u.department || '未分配部门',
+      }
+    })
+
+    // 计算未报名的员工（排除已在队伍中 + 排除已设为免报名的员工）
     const unassignedEmployees = allEmployees.filter(
-      (e) => !registeredUsernames.has(e.username.toLowerCase()),
+      (e) =>
+        !registeredUsernames.has(e.username.toLowerCase()) &&
+        !excludedUsernamesSet.has(e.username.toLowerCase()),
     )
 
     const departments = [
@@ -223,9 +253,12 @@ export class RallyStore {
 
     const totalMembers = teams.reduce((acc, t) => acc + t.memberCount, 0)
     const totalCompanyEmployees = allEmployees.length > 0 ? allEmployees.length : 142
+    const excludedCount = enrichedExcludedEmployees.length
+    const eligibleEmployeesCount = Math.max(0, totalCompanyEmployees - excludedCount)
     const maxCapacity = teams.reduce((acc, t) => acc + t.maxMembers, 0)
     const targetCapacity = teams.reduce((acc, t) => acc + t.targetMembers, 0)
-    const registrationRate = totalCompanyEmployees > 0 ? Math.round((totalMembers / totalCompanyEmployees) * 100) : 0
+    const registrationRate =
+      eligibleEmployeesCount > 0 ? Math.round((totalMembers / eligibleEmployeesCount) * 100) : 0
 
     return {
       title: this.state.title,
@@ -234,8 +267,11 @@ export class RallyStore {
       teams,
       departments,
       unassignedEmployees,
+      excludedEmployees: enrichedExcludedEmployees,
       statistics: {
         totalCompanyEmployees,
+        excludedCount,
+        eligibleEmployeesCount,
         totalMembers,
         unassignedCount: unassignedEmployees.length,
         registrationRate,
@@ -402,6 +438,79 @@ export class RallyStore {
     team.lockedLeaderUsername = undefined
     this.saveState()
     return { success: true, message: `队伍【${team.name}】已成功重置清空` }
+  }
+
+  // 排除人员（设为免报名）
+  public excludeUser(
+    user: { username: string; displayName?: string; department?: string },
+    reason?: string,
+    operatorUsername?: string,
+  ): { success: boolean; message: string; excludedUser: ExcludedUser } {
+    const username = user.username.trim()
+    if (!username) {
+      return { success: false, message: '用户名不能为空', excludedUser: null as any }
+    }
+
+    if (!this.state.excludedUsers) {
+      this.state.excludedUsers = []
+    }
+
+    // 如果该员工已经在某支队伍中，自动将其退出队伍
+    const existingTeam = this.findUserTeam(username)
+    if (existingTeam) {
+      this.leaveTeam(username)
+    }
+
+    const index = this.state.excludedUsers.findIndex(
+      (u) => u.username.toLowerCase() === username.toLowerCase(),
+    )
+
+    const displayName = user.displayName?.trim() || (index >= 0 ? this.state.excludedUsers[index].displayName : username)
+    const department = user.department?.trim() || (index >= 0 ? this.state.excludedUsers[index].department : '')
+
+    const record: ExcludedUser = {
+      username,
+      displayName,
+      department: department || undefined,
+      reason: reason?.trim() || '免参与健步拉练',
+      excludedAt: new Date().toISOString(),
+      excludedBy: operatorUsername || undefined,
+    }
+
+    if (index >= 0) {
+      this.state.excludedUsers[index] = record
+    } else {
+      this.state.excludedUsers.push(record)
+    }
+
+    this.saveState()
+    return {
+      success: true,
+      message: `已成功将【${displayName}】设为免报名人员`,
+      excludedUser: record,
+    }
+  }
+
+  // 恢复人员报名资格
+  public restoreUser(username: string): { success: boolean; message: string } {
+    const uname = username.trim().toLowerCase()
+    if (!this.state.excludedUsers || this.state.excludedUsers.length === 0) {
+      return { success: false, message: '该员工未在免报名名单中' }
+    }
+
+    const index = this.state.excludedUsers.findIndex(
+      (u) => u.username.toLowerCase() === uname,
+    )
+    if (index === -1) {
+      return { success: false, message: '该员工未在免报名名单中' }
+    }
+
+    const removed = this.state.excludedUsers.splice(index, 1)[0]
+    this.saveState()
+    return {
+      success: true,
+      message: `已恢复【${removed.displayName}】的报名参战资格`,
+    }
   }
 }
 

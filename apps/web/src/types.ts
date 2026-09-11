@@ -64,6 +64,15 @@ export interface LdapEmployee {
   email?: string
 }
 
+export interface ExcludedUser {
+  username: string
+  displayName: string
+  department?: string
+  reason?: string
+  excludedAt: string
+  excludedBy?: string
+}
+
 export interface SnapshotData {
   title: string
   theme: string
@@ -78,8 +87,11 @@ export interface SnapshotData {
   teams: TeamItem[]
   departments: string[]
   unassignedEmployees: LdapEmployee[]
+  excludedEmployees?: ExcludedUser[]
   statistics: {
     totalCompanyEmployees: number
+    excludedCount?: number
+    eligibleEmployeesCount?: number
     totalMembers: number
     unassignedCount: number
     registrationRate: number
