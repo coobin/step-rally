@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { TeamItem, MeResponse } from '../types.ts'
+import TeamFullStamp from './TeamFullStamp.vue'
 
 const props = defineProps<{
   team: TeamItem
@@ -24,7 +25,7 @@ const percentage = computed(() => {
 
 <template>
   <div
-    class="bg-white rounded-xl border transition-all duration-300 flex flex-col justify-between overflow-hidden hover:-translate-y-1 group"
+    class="relative bg-white rounded-xl border transition-all duration-300 flex flex-col justify-between overflow-hidden hover:-translate-y-1 group"
     :class="[
       isMyTeam
         ? 'border-red-600 shadow-md ring-2 ring-red-600/20'
@@ -42,6 +43,14 @@ const percentage = computed(() => {
           : 'from-red-800/80 via-amber-600/70 to-red-800/80'
       ]"
     ></div>
+
+    <!-- 满员印章 (Stamp) -->
+    <div
+      v-if="team.isFull"
+      class="absolute right-3.5 top-3 z-10 pointer-events-none select-none"
+    >
+      <TeamFullStamp :team-id="team.id" size="md" />
+    </div>
 
     <div class="p-4 sm:p-5">
       <!-- 队伍序号与状态 -->
@@ -78,9 +87,9 @@ const percentage = computed(() => {
         <!-- 满员 / 余位标签 -->
         <span
           v-if="team.isFull"
-          class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200"
+          class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200/80"
         >
-          已满员 (15/15)
+          {{ team.maxMembers }} / {{ team.maxMembers }} 人
         </span>
         <span
           v-else

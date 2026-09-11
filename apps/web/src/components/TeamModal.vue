@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import confetti from 'canvas-confetti'
 import type { TeamItem, MeResponse } from '../types.ts'
 import { api } from '../api.ts'
+import TeamFullStamp from './TeamFullStamp.vue'
 
 const props = defineProps<{
   team: TeamItem
@@ -151,9 +152,17 @@ async function handleResetTeam() {
       </button>
 
       <!-- 弹窗顶栏 -->
-      <div class="p-6 border-b border-slate-100 bg-slate-50/50">
+      <div class="p-6 border-b border-slate-100 bg-slate-50/50 relative overflow-hidden">
+        <!-- 满员官方印章 -->
+        <div
+          v-if="team.isFull"
+          class="absolute right-14 top-2.5 pointer-events-none select-none z-10"
+        >
+          <TeamFullStamp :team-id="'modal-' + team.id" size="md" />
+        </div>
+
         <div class="text-xs font-mono font-bold text-red-700 mb-1">
-          TEAM {{ team.id < 10 ? `0${team.id}` : team.id }} • 上限 15 人 (当前 {{ team.memberCount }} 人)
+          TEAM {{ team.id < 10 ? `0${team.id}` : team.id }} • 上限 {{ team.maxMembers }} 人 (当前 {{ team.memberCount }} 人)
         </div>
 
         <div v-if="!editing" class="flex items-start justify-between gap-3">
@@ -356,7 +365,7 @@ async function handleResetTeam() {
             <h4 class="text-xs font-bold text-slate-800">
               正式队员列表 ({{ team.memberCount }} / {{ team.maxMembers }} 人)
             </h4>
-            <span class="text-[11px] text-slate-400">满 15 人截止</span>
+            <span class="text-[11px] text-slate-400">满 {{ team.maxMembers }} 人截止</span>
           </div>
 
           <div v-if="team.members.length === 0" class="text-center py-8 text-xs text-slate-400 bg-slate-50 rounded-lg">

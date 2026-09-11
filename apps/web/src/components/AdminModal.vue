@@ -519,7 +519,7 @@ onMounted(() => {
               </div>
               <div class="p-2 bg-white rounded-lg border border-slate-100">
                 <span class="text-slate-400 block text-[10px]">每队人数上限</span>
-                <span class="font-bold text-slate-800 text-sm">15 人</span>
+                <span class="font-bold text-slate-800 text-sm">{{ settings?.activityRules?.maxPerTeam || 15 }} 人</span>
               </div>
               <div class="p-2 bg-white rounded-lg border border-slate-100">
                 <span class="text-slate-400 block text-[10px]">每队推荐人数</span>
