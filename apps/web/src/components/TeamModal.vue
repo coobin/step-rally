@@ -44,6 +44,16 @@ const canEdit = computed(() => {
   return isLeader.value || Boolean(props.me?.user?.isAdmin)
 })
 
+// 队长始终排在第一位展示
+const sortedMembers = computed(() => {
+  const leaderUser = props.team.currentLeader?.username
+  if (!leaderUser) return props.team.members
+  return [
+    ...props.team.members.filter((m) => m.username === leaderUser),
+    ...props.team.members.filter((m) => m.username !== leaderUser),
+  ]
+})
+
 async function handleJoin() {
   try {
     joining.value = true
@@ -374,7 +384,7 @@ async function handleResetTeam() {
 
           <div v-else class="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
             <div
-              v-for="(member, idx) in team.members"
+              v-for="(member, idx) in sortedMembers"
               :key="member.username"
               class="p-3 flex items-center justify-between gap-2 hover:bg-slate-50/60 transition"
               :class="{ 'bg-amber-50/30': team.currentLeader?.username === member.username }"

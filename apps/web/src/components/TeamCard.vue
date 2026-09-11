@@ -21,6 +21,16 @@ const isMyTeam = computed(() => {
 const percentage = computed(() => {
   return Math.min(100, Math.round((props.team.memberCount / props.team.maxMembers) * 100))
 })
+
+// 队长始终排在第一位展示
+const sortedMembers = computed(() => {
+  const leaderUser = props.team.currentLeader?.username
+  if (!leaderUser) return props.team.members
+  return [
+    ...props.team.members.filter((m) => m.username === leaderUser),
+    ...props.team.members.filter((m) => m.username !== leaderUser),
+  ]
+})
 </script>
 
 <template>
@@ -148,7 +158,7 @@ const percentage = computed(() => {
         </div>
         <div v-else class="flex flex-wrap gap-1">
           <span
-            v-for="m in team.members.slice(0, 8)"
+            v-for="m in sortedMembers.slice(0, 8)"
             :key="m.username"
             class="text-[11px] px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-100 flex items-center gap-1"
             :class="{ 'border-amber-300 bg-amber-50/80 font-bold text-amber-900 shadow-xs': team.currentLeader?.username === m.username }"
@@ -156,8 +166,8 @@ const percentage = computed(() => {
             <span v-if="team.currentLeader?.username === m.username">👑</span>
             <span>{{ m.displayName }}</span>
           </span>
-          <span v-if="team.members.length > 8" class="text-[10px] text-slate-400 self-center pl-1 font-mono font-medium">
-            +{{ team.members.length - 8 }}
+          <span v-if="sortedMembers.length > 8" class="text-[10px] text-slate-400 self-center pl-1 font-mono font-medium">
+            +{{ sortedMembers.length - 8 }}
           </span>
         </div>
       </div>

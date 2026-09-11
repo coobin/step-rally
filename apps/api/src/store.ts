@@ -294,6 +294,14 @@ export class RallyStore {
   public getTeamsSummary() {
     return this.state.teams.map((team) => {
       const stats = this.getTeamVoteStats(team)
+      const leaderUsername = stats.currentElectedLeader?.username
+      const sortedMembers = leaderUsername
+        ? [
+            ...team.members.filter((m) => m.username === leaderUsername),
+            ...team.members.filter((m) => m.username !== leaderUsername),
+          ]
+        : team.members
+
       return {
         id: team.id,
         name: team.name,
@@ -304,7 +312,7 @@ export class RallyStore {
         maxMembers: team.maxMembers,
         targetMembers: team.targetMembers,
         isFull: team.members.length >= team.maxMembers,
-        members: team.members,
+        members: sortedMembers,
         votes: team.votes,
         voteRanking: stats.voteRanking,
         currentLeader: stats.currentElectedLeader,
