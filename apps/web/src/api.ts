@@ -79,11 +79,28 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ username, action }),
     }),
-  updateTeamCapacity: (maxMembers: number, teamId?: number) =>
-    request<{ success: boolean; message: string; maxPerTeam: number }>('/admin/settings/team-capacity', {
-      method: 'POST',
-      body: JSON.stringify({ maxMembers, teamId }),
-    }),
+  updateTeamCapacity: (
+    params:
+      | number
+      | {
+          maxMembers?: number
+          teamId?: number
+          teamCapacities?: Record<string | number, number>
+        },
+    teamId?: number,
+  ) => {
+    const body =
+      typeof params === 'number'
+        ? { maxMembers: params, teamId }
+        : params
+    return request<{ success: boolean; message: string; maxPerTeam?: number; teams?: any[] }>(
+      '/admin/settings/team-capacity',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      },
+    )
+  },
   getExportUrl: () => `${API_BASE}/export/excel`,
   getOidcLoginUrl: () => `${API_BASE}/auth/oidc/login`,
   getLogoutUrl: () => `${API_BASE}/auth/logout`,

@@ -174,3 +174,7 @@ export async function fetchLdapEmployees(): Promise<LdapEmployee[]> {
     } catch {}
   }
 }
+
+export function getCachedEmployees(): LdapEmployee[] {
+  return cachedEmployees
+}

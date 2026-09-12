@@ -376,14 +376,7 @@ const server = createServer(async (req, res) => {
           return
         }
         const body = await parseJsonBody(req)
-        const maxMembers = Number(body.maxMembers)
-        const teamId = body.teamId ? Number(body.teamId) : undefined
-        if (!maxMembers || maxMembers < 1) {
-          sendResponse(res, jsonResponse(400, { error: '请输入合法的队伍人数上限' }))
-          return
-        }
-
-        const result = rallyStore.updateTeamCapacity(maxMembers, teamId)
+        const result = rallyStore.updateTeamCapacity(body)
         sendResponse(res, jsonResponse(result.success ? 200 : 400, result))
         return
       }

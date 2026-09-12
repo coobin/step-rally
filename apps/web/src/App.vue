@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import Navbar from './components/Navbar.vue'
 import TeamCard from './components/TeamCard.vue'
 import TeamModal from './components/TeamModal.vue'
 import UnassignedList from './components/UnassignedList.vue'
 import AdminModal from './components/AdminModal.vue'
+import CelebrationModal from './components/CelebrationModal.vue'
 import { api } from './api.ts'
 import type { MeResponse, SnapshotData, TeamItem, LdapEmployee } from './types.ts'
 
@@ -14,7 +15,14 @@ const loading = ref(true)
 
 const activeTeam = ref<TeamItem | null>(null)
 const showAdminSettings = ref(false)
+const showCelebration = ref(false)
 const mobileTab = ref<'teams' | 'unassigned'>('teams')
+
+// 判断所有队伍是否全部满员
+const isAllTeamsFull = computed(() => {
+  if (!snapshot.value?.teams || snapshot.value.teams.length === 0) return false
+  return snapshot.value.teams.every((t) => t.isFull || t.memberCount >= (t.maxMembers || 14))
+})
 
 // Toast 提示
 const toastMessage = ref('')
@@ -143,6 +151,11 @@ onMounted(async () => {
   }
 
   await loadData()
+  // 所有队伍都满员后，每次打开首页触发炫酷满员动效
+  if (isAllTeamsFull.value) {
+    showCelebration.value = true
+  }
+
   refreshTimer = setInterval(() => {
     loadData()
   }, 12000)
@@ -350,10 +363,44 @@ onUnmounted(() => {
           class="lg:col-span-8 space-y-4"
           :class="{ 'hidden lg:block': mobileTab === 'unassigned' }"
         >
+          <!-- 全员满员庆典喜报横幅 -->
+          <div
+            v-if="isAllTeamsFull && snapshot"
+            class="p-4 rounded-2xl bg-gradient-to-r from-red-900 via-red-800 to-amber-900 text-white shadow-lg border-2 border-amber-400/80 flex flex-col sm:flex-row items-center justify-between gap-3 relative overflow-hidden"
+          >
+            <div class="flex items-center gap-3 z-10">
+              <div class="w-11 h-11 rounded-xl bg-amber-400/25 border border-amber-300/40 flex items-center justify-center text-2xl flex-shrink-0 animate-bounce">
+                🏆
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="font-black text-sm sm:text-base text-amber-200 tracking-wide">
+                    🎉 喜报：10 支代表队全线满员！
+                  </h3>
+                  <span class="text-[10px] bg-amber-400 text-amber-950 font-bold px-2 py-0.2 rounded-full">
+                    组队率 100%
+                  </span>
+                </div>
+                <p class="text-xs text-amber-100/90 mt-0.5">
+                  全公司 {{ snapshot.statistics.totalMembers }} 位健步战友全部组队完毕，红色拉练征程正式启航！
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="btn bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-amber-950 font-bold text-xs px-3.5 py-2 rounded-xl shadow-md border border-amber-200/60 flex items-center gap-1.5 whitespace-nowrap z-10 transition hover:scale-105 active:scale-95 cursor-pointer flex-shrink-0"
+              @click="showCelebration = true"
+            >
+              <span>🎆</span>
+              <span>重温满员庆典</span>
+            </button>
+          </div>
+
           <div class="flex items-center justify-between">
             <h3 class="font-bold text-sm text-slate-800 flex items-center gap-2">
               <span>🚩</span>
-              <span>十支代表队 (每队上限 {{ snapshot?.activityRules?.maxPerTeam || 15 }} 人)</span>
+              <span>十支代表队 (共计 {{ snapshot?.statistics?.maxCapacity || 140 }} 席位)</span>
             </h3>
             <span class="text-xs text-slate-400">点击队伍进入推选队长</span>
           </div>
@@ -417,6 +464,13 @@ onUnmounted(() => {
       @close="showAdminSettings = false"
       @refresh="loadData"
       @toast="showToast"
+    />
+
+    <!-- 全员满员炫酷庆典弹窗 -->
+    <CelebrationModal
+      :show="showCelebration"
+      :snapshot="snapshot"
+      @close="showCelebration = false"
     />
   </div>
 </template>

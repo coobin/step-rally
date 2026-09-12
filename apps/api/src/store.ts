@@ -13,6 +13,7 @@ import {
 } from 'node:fs'
 import { dirname, resolve, join } from 'node:path'
 import { appConfig } from './config.ts'
+import { getCachedEmployees } from './ldap.ts'
 
 export interface TeamMember {
   username: string
@@ -738,23 +739,86 @@ export class RallyStore {
     }
   }
 
-  // 设置每队人数上限（统一设置所有队伍，或支持单独设置某队伍）
+  // 设置每队人数上限（支持独立设置每支队伍、单独某队、或统一设置全局上限，并严格校验合计人数不能超过总人数）
   public updateTeamCapacity(
-    maxMembers: number,
-    teamId?: number,
+    options:
+      | number
+      | {
+          maxMembers?: number
+          teamId?: number
+          teamCapacities?: Record<string | number, number>
+        },
+    legacyTeamId?: number,
   ): { success: boolean; message: string; maxPerTeam: number } {
-    const limit = Math.floor(Number(maxMembers))
-    if (!Number.isFinite(limit) || limit < 1 || limit > 100) {
+    const allEmployees = getCachedEmployees()
+    const totalCompanyEmployees = allEmployees.length > 0 ? allEmployees.length : 142
+
+    // 1. 批量独立设置各队人数上限：{ teamCapacities: { 1: 14, 2: 15, ... } }
+    if (typeof options === 'object' && options.teamCapacities) {
+      const capacities = options.teamCapacities
+      let totalCapacity = 0
+      const updates: Array<{ team: Team; limit: number }> = []
+
+      for (const team of this.state.teams) {
+        const rawLimit = capacities[team.id] !== undefined ? capacities[team.id] : team.maxMembers
+        const limit = Math.floor(Number(rawLimit))
+        if (!Number.isFinite(limit) || limit < 1 || limit > 100) {
+          return {
+            success: false,
+            message: `【${team.name}】的人数上限必须是 1 到 100 之间的整数`,
+            maxPerTeam: this.state.activityRules.maxPerTeam,
+          }
+        }
+        if (team.members.length > limit) {
+          return {
+            success: false,
+            message: `【${team.name}】当前已有 ${team.members.length} 人，上限人数不能低于已有成员数`,
+            maxPerTeam: this.state.activityRules.maxPerTeam,
+          }
+        }
+        totalCapacity += limit
+        updates.push({ team, limit })
+      }
+
+      // 核心规则：队伍合计人数不能超过公司总人数
+      if (totalCapacity > totalCompanyEmployees) {
+        return {
+          success: false,
+          message: `各队伍人数上限总和（${totalCapacity}人）不能超过公司总人数（${totalCompanyEmployees}人）`,
+          maxPerTeam: this.state.activityRules.maxPerTeam,
+        }
+      }
+
+      for (const item of updates) {
+        item.team.maxMembers = item.limit
+      }
+      this.state.activityRules.maxPerTeam = Math.max(...this.state.teams.map((t) => t.maxMembers))
+      this.saveState()
+
       return {
-        success: false,
-        message: '每队人数上限必须是 1 到 100 之间的整数',
+        success: true,
+        message: `已成功保存各队独立人数上限（合计 ${totalCapacity} 人 / 上限 ${totalCompanyEmployees} 人）`,
         maxPerTeam: this.state.activityRules.maxPerTeam,
       }
     }
 
-    // 若指定了具体队伍
-    if (teamId) {
-      const team = this.state.teams.find((t) => t.id === teamId)
+    // 2. 单独设置某一支队伍的人数上限
+    const targetTeamId =
+      typeof options === 'object' ? options.teamId : legacyTeamId
+    const targetMaxMembers =
+      typeof options === 'object' ? options.maxMembers : options
+
+    const limit = Math.floor(Number(targetMaxMembers))
+    if (!Number.isFinite(limit) || limit < 1 || limit > 100) {
+      return {
+        success: false,
+        message: '队伍人数上限必须是 1 到 100 之间的整数',
+        maxPerTeam: this.state.activityRules.maxPerTeam,
+      }
+    }
+
+    if (targetTeamId) {
+      const team = this.state.teams.find((t) => t.id === targetTeamId)
       if (!team) {
         return {
           success: false,
@@ -769,16 +833,39 @@ export class RallyStore {
           maxPerTeam: this.state.activityRules.maxPerTeam,
         }
       }
+
+      const totalCapacity = this.state.teams.reduce(
+        (acc, t) => acc + (t.id === targetTeamId ? limit : t.maxMembers),
+        0,
+      )
+      if (totalCapacity > totalCompanyEmployees) {
+        return {
+          success: false,
+          message: `调整后各队人数上限总和（${totalCapacity}人）超过了公司总人数（${totalCompanyEmployees}人）`,
+          maxPerTeam: this.state.activityRules.maxPerTeam,
+        }
+      }
+
       team.maxMembers = limit
+      this.state.activityRules.maxPerTeam = Math.max(...this.state.teams.map((t) => t.maxMembers))
       this.saveState()
       return {
         success: true,
-        message: `已将【${team.name}】的人数上限调整为 ${limit} 人`,
+        message: `已将【${team.name}】的人数上限调整为 ${limit} 人（合计 ${totalCapacity} / ${totalCompanyEmployees} 人）`,
         maxPerTeam: this.state.activityRules.maxPerTeam,
       }
     }
 
-    // 全局统一调整
+    // 3. 全局统一调整
+    const totalCapacity = limit * this.state.teams.length
+    if (totalCapacity > totalCompanyEmployees) {
+      return {
+        success: false,
+        message: `统一设为 ${limit} 人将导致队伍总容量（${totalCapacity}人）超过公司总人数（${totalCompanyEmployees}人），请降低单队上限或使用独立队伍设置`,
+        maxPerTeam: this.state.activityRules.maxPerTeam,
+      }
+    }
+
     const overflowingTeams = this.state.teams.filter((t) => t.members.length > limit)
     if (overflowingTeams.length > 0) {
       const names = overflowingTeams.map((t) => `【${t.name}】(${t.members.length}人)`).join('、')
@@ -797,7 +884,7 @@ export class RallyStore {
 
     return {
       success: true,
-      message: `已成功将各队人数上限统一设置为 ${limit} 人`,
+      message: `已成功将各队人数上限统一设置为 ${limit} 人（合计 ${totalCapacity} / ${totalCompanyEmployees} 人）`,
       maxPerTeam: limit,
     }
   }
