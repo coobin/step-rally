@@ -72,7 +72,7 @@ function logout() {
               公益健步拉练
             </span>
           </div>
-          <p class="text-[11px] text-slate-500 hidden md:block mt-0.5">10 支代表队自主组建 · 队内投票推选队长</p>
+          <p class="text-[11px] text-slate-500 hidden sm:block mt-0.5">湖南承希科技有限公司</p>
         </div>
       </div>
 
