@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onUnmounted, watch } from 'vue'
 import confetti from 'canvas-confetti'
 import type { SnapshotData } from '../types.ts'
 
@@ -12,7 +12,10 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-function triggerConfetti() {
+let fireworksTimer: any = null
+
+// 初始豪华三连响大爆发
+function triggerBigBurst() {
   // 1. 左右两翼双礼炮对轰
   confetti({
     particleCount: 90,
@@ -31,7 +34,7 @@ function triggerConfetti() {
     zIndex: 9999,
   })
 
-  // 2. 400ms 后金星与五角星倾泻
+  // 2. 金星与五角星倾泻
   setTimeout(() => {
     confetti({
       particleCount: 70,
@@ -44,7 +47,7 @@ function triggerConfetti() {
     })
   }, 350)
 
-  // 3. 1000ms 后中央万紫千红大爆发
+  // 3. 中央万紫千红大爆发
   setTimeout(() => {
     confetti({
       particleCount: 110,
@@ -53,13 +56,82 @@ function triggerConfetti() {
       colors: ['#dc2626', '#b91c1c', '#f59e0b', '#fbbf24', '#34d399', '#60a5fa'],
       zIndex: 9999,
     })
-  }, 900)
+  }, 800)
 }
 
-onMounted(() => {
-  if (props.show) {
-    triggerConfetti()
+// 随机位置烟花绽放
+function shootRandomFirework() {
+  const x = 0.15 + Math.random() * 0.7
+  const y = 0.15 + Math.random() * 0.45
+  const count = 40 + Math.floor(Math.random() * 35)
+
+  const palettes = [
+    ['#ef4444', '#f59e0b', '#ffd700', '#ffffff'],
+    ['#3b82f6', '#10b981', '#f59e0b', '#ec4899'],
+    ['#ffd700', '#f59e0b', '#fbbf24', '#f97316'],
+    ['#dc2626', '#b91c1c', '#f59e0b', '#ffffff'],
+    ['#ec4899', '#8b5cf6', '#ffd700', '#ffffff'],
+  ]
+  const colors = palettes[Math.floor(Math.random() * palettes.length)]
+  const useStars = Math.random() > 0.45
+
+  confetti({
+    particleCount: count,
+    spread: 65 + Math.random() * 60,
+    origin: { x, y },
+    colors,
+    shapes: useStars ? ['star', 'circle'] : ['circle'],
+    scalar: useStars ? 1.15 : 1,
+    zIndex: 9999,
+    disableForReducedMotion: true,
+  })
+}
+
+// 启动持续放烟花
+function startContinuousFireworks() {
+  stopContinuousFireworks()
+  // 首次打开弹窗先放一次超级大礼花
+  triggerBigBurst()
+
+  // 随后每隔 1.1 秒随机放一束烟花，伴随边缘礼炮，营造持续漫天烟火特效
+  fireworksTimer = setInterval(() => {
+    shootRandomFirework()
+    // 40% 概率双侧加农炮辅助点缀
+    if (Math.random() > 0.6) {
+      confetti({
+        particleCount: 30,
+        angle: Math.random() > 0.5 ? 60 : 120,
+        spread: 55,
+        origin: { x: Math.random() > 0.5 ? 0.05 : 0.95, y: 0.7 },
+        colors: ['#ef4444', '#f59e0b', '#ffd700'],
+        zIndex: 9999,
+      })
+    }
+  }, 1100)
+}
+
+// 停止持续烟花
+function stopContinuousFireworks() {
+  if (fireworksTimer) {
+    clearInterval(fireworksTimer)
+    fireworksTimer = null
   }
+}
+
+watch(
+  () => props.show,
+  (val) => {
+    if (val) {
+      startContinuousFireworks()
+    } else {
+      stopContinuousFireworks()
+    }
+  },
+  { immediate: true }
+)
+
+onUnmounted(() => {
+  stopContinuousFireworks()
 })
 </script>
 
@@ -166,10 +238,11 @@ onMounted(() => {
           <button
             type="button"
             class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-xs transition cursor-pointer flex items-center justify-center gap-1.5 border border-white/20"
-            @click="triggerConfetti"
+            @click="triggerBigBurst"
+            title="手动追加一波超级大礼花"
           >
             <span>🎆</span>
-            <span>再放一次礼花</span>
+            <span>再来一波超级大礼花</span>
           </button>
         </div>
       </div>
