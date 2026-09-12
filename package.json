@@ -1,13 +1,15 @@
 {
-  "name": "red-walk-rally",
+  "name": "step-rally",
   "private": true,
   "version": "1.0.0",
-  "description": "一步一善·重走经典红色路 组队报名与队长推选系统",
+  "description": "团队先锋 - 大型团队竞技与拉练组队报名系统 (Cloudflare Pages & Docker 双模式兼容)",
   "type": "module",
   "scripts": {
     "dev": "npm --workspace apps/web run dev",
     "api:dev": "npm --workspace apps/api run dev",
     "build": "npm --workspace apps/web run build && npm --workspace apps/api run build",
+    "build:web": "npm --workspace apps/web run build",
+    "build:pages": "npm --workspace apps/web run build",
     "build:api": "npm --workspace apps/api run build",
     "start": "npm --workspace apps/api run start"
   },
@@ -17,5 +19,8 @@
   ],
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "hono": "^4.13.7"
   }
 }
