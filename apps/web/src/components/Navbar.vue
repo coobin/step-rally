@@ -11,6 +11,7 @@ const emit = defineEmits<{
   (e: 'refresh'): void
   (e: 'leave-team'): void
   (e: 'open-admin-settings'): void
+  (e: 'open-login'): void
 }>()
 
 const showAdminMenu = ref(false)
@@ -66,13 +67,15 @@ function logout() {
         <div class="whitespace-nowrap">
           <div class="flex items-center gap-1.5 sm:gap-2">
             <h1 class="text-sm sm:text-base md:text-lg font-black text-slate-900 tracking-tight leading-tight">
-              一步一善 · 经典红色路
+              {{ snapshot?.title || '荣耀征程 · 团队拉练' }}
             </h1>
             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-200 tracking-wider">
-              公益健步拉练
+              团队竞技
             </span>
           </div>
-          <p class="text-[11px] text-slate-500 hidden sm:block mt-0.5">湖南承希科技有限公司</p>
+          <p class="text-[11px] text-slate-500 hidden sm:block mt-0.5 max-w-[280px] truncate">
+            {{ snapshot?.theme || '大型团队竞技与拉练争霸赛' }}
+          </p>
         </div>
       </div>
 
@@ -82,7 +85,7 @@ function logout() {
         class="hidden xl:flex items-center gap-3 text-xs bg-slate-50/90 px-3.5 py-1.5 rounded-full border border-slate-200/90 whitespace-nowrap flex-shrink-0 shadow-2xs"
       >
         <span class="flex items-center gap-1 text-slate-600">
-          <span class="text-slate-400">在职</span>
+          <span class="text-slate-400">名单总数</span>
           <strong class="text-slate-900 font-bold font-mono">{{ snapshot.statistics.totalCompanyEmployees }}</strong>人
         </span>
         <span class="text-slate-300">•</span>
@@ -102,7 +105,7 @@ function logout() {
         </span>
       </div>
 
-      <!-- 右侧用户状态与操作 -->
+      <!-- 右侧用户状态与操作 (未登录显示登录按钮，已登录显示头像与身份) -->
       <div v-if="me?.user" class="flex items-center gap-2 sm:gap-3 flex-shrink-0 pl-2 sm:pl-3">
         <!-- 用户身份卡片与管理下拉菜单 -->
         <div class="relative flex items-center gap-2" ref="avatarMenuRef">
@@ -210,6 +213,18 @@ function logout() {
           title="退出当前账号登录"
         >
           <span>退出</span>
+        </button>
+      </div>
+
+      <!-- 未登录时显示登录 / 报名按钮 -->
+      <div v-else class="flex items-center gap-2 flex-shrink-0">
+        <button
+          type="button"
+          class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-red-700 to-red-800 hover:from-red-600 hover:to-red-700 text-white text-xs font-bold shadow-sm transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+          @click="emit('open-login')"
+        >
+          <span>👤</span>
+          <span>队员登录 / 报名</span>
         </button>
       </div>
     </div>

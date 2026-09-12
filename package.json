@@ -1,20 +1,8 @@
 {
-  "name": "step-rally",
+  "name": "red-walk-rally",
   "private": true,
   "version": "1.0.0",
-  "description": "企业健步拉练与毅行挑战组队系统 / Corporate Walking Rally & Team Formation System",
-  "license": "MIT",
-  "keywords": [
-    "rally",
-    "walking-challenge",
-    "team-formation",
-    "captain-voting",
-    "sports",
-    "oidc",
-    "ldap",
-    "vue3",
-    "typescript"
-  ],
+  "description": "一步一善·重走经典红色路 组队报名与队长推选系统",
   "type": "module",
   "scripts": {
     "dev": "npm --workspace apps/web run dev",

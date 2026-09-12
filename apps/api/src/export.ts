@@ -95,3 +95,32 @@ export async function generateRallyExcelBuffer(): Promise<Buffer> {
   const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
   return excelBuffer as Buffer
 }
+
+export function generateRosterTemplateBuffer(): Buffer {
+  const sampleRows = [
+    {
+      '姓名 (必填)': '张三',
+      '部门 (选填)': '技术研发部',
+      '手机号 (选填)': '13800000001',
+      '备注 (选填)': '先锋队员',
+    },
+    {
+      '姓名 (必填)': '李四',
+      '部门 (选填)': '市场运营部',
+      '手机号 (选填)': '13800000002',
+      '备注 (选填)': '',
+    },
+    {
+      '姓名 (必填)': '王五',
+      '部门 (选填)': '综合管理部',
+      '手机号 (选填)': '13800000003',
+      '备注 (选填)': '',
+    },
+  ]
+
+  const wb = XLSX.utils.book_new()
+  const ws = XLSX.utils.json_to_sheet(sampleRows)
+  XLSX.utils.book_append_sheet(wb, ws, '参赛花名册导入模板')
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+}
+

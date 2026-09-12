@@ -180,17 +180,17 @@ onUnmounted(() => {
         <div class="space-y-1">
           <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold tracking-widest uppercase">
             <span>✨</span>
-            <span>湖南承希科技有限公司</span>
+            <span>{{ snapshot?.title || '团队先锋 · 拉练争霸赛' }}</span>
             <span>✨</span>
           </div>
           <h2 class="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-amber-100 via-amber-300 to-amber-100 bg-clip-text text-transparent mt-2">
             🎉 全 员 集 结 完 毕 🎉
           </h2>
           <p class="text-sm sm:text-base font-bold text-red-300/95 tracking-wide">
-            10 支经典红色路战队全线满员！
+            {{ snapshot?.teams.length || 8 }} 支荣耀战队全线满员！
           </p>
           <p class="text-xs text-slate-300/80 pt-1 max-w-sm mx-auto">
-            一步一善，万众一心！公司全体健步英雄已就位，红色拉练出征号角正式吹响！
+            万众一心，势如破竹！全体健步勇士已就位，出征集结号角正式吹响！
           </p>
         </div>
 
@@ -198,7 +198,9 @@ onUnmounted(() => {
         <div class="grid grid-cols-3 gap-2.5 my-5 text-left">
           <div class="p-3 rounded-xl bg-white/5 border border-white/10 text-center backdrop-blur-xs">
             <span class="text-[10px] text-slate-400 block font-medium">战队编制</span>
-            <span class="text-base sm:text-lg font-black font-mono text-amber-300">10 / 10 队</span>
+            <span class="text-base sm:text-lg font-black font-mono text-amber-300">
+              {{ snapshot?.teams.length || 8 }} / {{ snapshot?.teams.length || 8 }} 队
+            </span>
             <span class="text-[9px] text-emerald-400 block mt-0.5 font-semibold">全部满员</span>
           </div>
           <div class="p-3 rounded-xl bg-white/5 border border-white/10 text-center backdrop-blur-xs">

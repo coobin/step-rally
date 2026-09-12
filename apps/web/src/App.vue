@@ -6,6 +6,7 @@ import TeamModal from './components/TeamModal.vue'
 import UnassignedList from './components/UnassignedList.vue'
 import AdminModal from './components/AdminModal.vue'
 import CelebrationModal from './components/CelebrationModal.vue'
+import LoginModal from './components/LoginModal.vue'
 import { api } from './api.ts'
 import type { MeResponse, SnapshotData, TeamItem, LdapEmployee } from './types.ts'
 
@@ -16,6 +17,7 @@ const loading = ref(true)
 const activeTeam = ref<TeamItem | null>(null)
 const showAdminSettings = ref(false)
 const showCelebration = ref(false)
+const showLoginModal = ref(false)
 const mobileTab = ref<'teams' | 'unassigned'>('teams')
 
 // 判断所有队伍是否全部满员
@@ -63,6 +65,11 @@ function handleViewTeam(team: TeamItem) {
 }
 
 async function handleJoinTeamDirect(teamId: number) {
+  if (!me.value?.user) {
+    showToast('请先输入姓名登录后再加入战队', 'error')
+    showLoginModal.value = true
+    return
+  }
   const target = snapshot.value?.teams.find((t) => t.id === teamId)
   if (target) activeTeam.value = target
 }
@@ -86,6 +93,11 @@ async function handleLeaveTeam(team?: TeamItem) {
 
 // 快捷拉待组队同事入自己队伍
 async function handleInviteToMyTeam(emp: LdapEmployee) {
+  if (!me.value?.user) {
+    showToast('请先输入姓名登录后再操作', 'error')
+    showLoginModal.value = true
+    return
+  }
   if (!me.value?.myTeam) {
     showToast('请先加入一支队伍，才能邀请其他同事', 'error')
     return
@@ -203,6 +215,7 @@ onUnmounted(() => {
       @refresh="loadData"
       @leave-team="handleLeaveTeam()"
       @open-admin-settings="showAdminSettings = true"
+      @open-login="showLoginModal = true"
     />
 
     <main class="container py-6 flex-1 relative z-10">
@@ -223,11 +236,11 @@ onUnmounted(() => {
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-800/90 text-amber-300 text-xs font-bold border border-amber-400/30 shadow-inner">
                 <span class="animate-pulse">🔥</span>
-                <span>2026 全员公益健步拉练</span>
+                <span>2026 团队竞技争霸拉练</span>
               </span>
               <span class="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 text-white/90 text-xs font-medium backdrop-blur-sm border border-white/10">
                 <span>👟</span>
-                <span>每日每人 6,000 步 · 团队健步挑战</span>
+                <span>每日每人 {{ snapshot.activityRules?.targetStepsDaily || 8000 }} 步 · 团队协同挑战</span>
               </span>
             </div>
 
@@ -240,11 +253,26 @@ onUnmounted(() => {
           <!-- 主标题与使命口号 -->
           <div class="relative z-10 max-w-2xl mb-4">
             <h2 class="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight text-white flex items-center gap-2">
-              <span>一步一善 · 重走经典红色路</span>
+              <span>{{ snapshot.title || '荣耀征程 · 大型团队竞技与拉练争霸赛' }}</span>
             </h2>
             <p class="text-xs sm:text-sm text-red-100/90 mt-1.5 font-normal leading-relaxed">
-              让行走更有意义，为乡村孩子送去优质课堂！全公司组建 <strong class="text-amber-300 font-bold">10 支战队</strong>，每队上限 <strong class="text-amber-300 font-bold">{{ snapshot.activityRules.maxPerTeam }} 人</strong>，队内一人一票推选领跑队长。
+              {{ snapshot.theme || '凝聚团队力量，向目标全速进发！' }} 全员组建 <strong class="text-amber-300 font-bold">{{ snapshot.teams.length }} 支战队</strong>，队内一人一票推选领跑队长。
             </p>
+          </div>
+
+          <!-- 未登录快速引导栏 -->
+          <div v-if="!me?.user" class="relative z-10 mb-4 p-3 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5 text-xs">
+              <span class="text-lg">📢</span>
+              <span>您当前为<strong>游客浏览模式</strong>，输入您的花名册姓名即可立即加入心仪战队！</span>
+            </div>
+            <button
+              type="button"
+              class="px-4 py-1.5 rounded-lg bg-white text-red-900 font-bold text-xs hover:bg-amber-100 transition shadow-sm cursor-pointer active:scale-95"
+              @click="showLoginModal = true"
+            >
+              立即输入姓名登录 🚀
+            </button>
           </div>
 
           <!-- 红色拉练全员集结进度条 -->
@@ -443,8 +471,16 @@ onUnmounted(() => {
 
     <!-- 极简页脚 -->
     <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400 mt-auto">
-      <p>承希科技 · 一步一善 经典红色路公益健步活动 2026</p>
+      <p>{{ snapshot?.title || '团队先锋 · 大型团队竞技与拉练争霸赛' }} · 2026</p>
     </footer>
+
+    <!-- 队员登录/管理员登录弹窗 -->
+    <LoginModal
+      v-if="showLoginModal"
+      @close="showLoginModal = false"
+      @login-success="loadData"
+      @toast="showToast"
+    />
 
     <!-- 队伍详情与投票弹窗 -->
     <TeamModal

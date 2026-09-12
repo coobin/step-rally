@@ -2,8 +2,19 @@ export interface AuthUser {
   id: string
   username: string
   displayName: string
+  department?: string
   isAdmin: boolean
-  authSource: 'oidc' | 'mock'
+  authSource: 'roster' | 'admin' | 'oidc' | 'mock'
+}
+
+export interface RosterUser {
+  id: string
+  name: string
+  department?: string
+  phone?: string
+  note?: string
+  isAdmin?: boolean
+  createdAt: string
 }
 
 export interface MyTeamInfo {

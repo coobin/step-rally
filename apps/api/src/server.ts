@@ -8,12 +8,14 @@ import {
   oidcLogin,
   oidcCallback,
   createMockSession,
+  loginByName,
+  loginAsAdmin,
   logout,
   jsonResponse,
   type AuthRouteResponse,
 } from './auth.ts'
 import { rallyStore } from './store.ts'
-import { generateRallyExcelBuffer } from './export.ts'
+import { generateRallyExcelBuffer, generateRosterTemplateBuffer } from './export.ts'
 
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -36,7 +38,7 @@ function parseJsonBody(req: IncomingMessage): Promise<any> {
     let body = ''
     req.on('data', (chunk) => {
       body += chunk
-      if (body.length > 1024 * 1024) {
+      if (body.length > 10 * 1024 * 1024) {
         rej(new Error('Payload too large'))
       }
     })
@@ -48,6 +50,24 @@ function parseJsonBody(req: IncomingMessage): Promise<any> {
       }
     })
     req.on('error', rej)
+  })
+}
+
+function parseRawBody(req: IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let totalLen = 0
+    req.on('data', (chunk: Buffer) => {
+      chunks.push(chunk)
+      totalLen += chunk.length
+      if (totalLen > 20 * 1024 * 1024) {
+        reject(new Error('Payload too large'))
+      }
+    })
+    req.on('end', () => {
+      resolve(Buffer.concat(chunks))
+    })
+    req.on('error', reject)
   })
 }
 
@@ -156,21 +176,40 @@ const server = createServer(async (req, res) => {
         return
       }
 
-      // 2. OIDC 登录跳转
+      // 2. 姓名直接登录（在已录入名单中校验）
+      if (req.method === 'POST' && pathname === '/api/v1/auth/login-by-name') {
+        const body = await parseJsonBody(req)
+        const name = String(body.name || '').trim()
+        const department = String(body.department || '').trim() || undefined
+        const authResp = loginByName(name, department)
+        sendResponse(res, authResp)
+        return
+      }
+
+      // 3. 管理员专属密码登录
+      if (req.method === 'POST' && pathname === '/api/v1/auth/admin-login') {
+        const body = await parseJsonBody(req)
+        const password = String(body.password || '').trim()
+        const authResp = loginAsAdmin(password)
+        sendResponse(res, authResp)
+        return
+      }
+
+      // 4. OIDC 登录跳转
       if (isGetOrHead && pathname === '/api/v1/auth/oidc/login') {
         const authResp = await oidcLogin(req)
         sendResponse(res, authResp)
         return
       }
 
-      // 3. OIDC 回调
+      // 5. OIDC 回调
       if (isGetOrHead && pathname === '/api/v1/auth/oidc/callback') {
         const authResp = await oidcCallback(req, requestUrl)
         sendResponse(res, authResp)
         return
       }
 
-      // 4. 便捷/快速模拟登录（支持自定义中文名和账号，方便本地或未配置 OIDC 时测试）
+      // 6. 便捷/快速模拟登录（支持自定义中文名和账号，方便本地测试）
       if (req.method === 'POST' && pathname === '/api/v1/auth/mock-login') {
         const body = await parseJsonBody(req)
         const username = String(body.username || '').trim()
@@ -191,7 +230,7 @@ const server = createServer(async (req, res) => {
         return
       }
 
-      // 5. 退出登录
+      // 7. 退出登录
       if (req.method === 'GET' && pathname === '/api/v1/auth/logout') {
         sendResponse(res, logout())
         return
@@ -381,23 +420,119 @@ const server = createServer(async (req, res) => {
         return
       }
 
+      // 17. 下载参赛花名册导入模板
+      if (isGetOrHead && pathname === '/api/v1/admin/roster/template') {
+        const buffer = generateRosterTemplateBuffer()
+        res.writeHead(200, {
+          'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'content-disposition': 'attachment; filename="roster_template.xlsx"',
+          'content-length': buffer.length,
+        })
+        res.end(buffer)
+        return
+      }
+
+      // 18. Excel 批量导入花名册
+      if (req.method === 'POST' && pathname === '/api/v1/admin/roster/import') {
+        if (!user || !isUserAdmin(user.username)) {
+          sendResponse(res, jsonResponse(403, { error: '无权操作，仅系统管理员可导入名单' }))
+          return
+        }
+        const contentType = req.headers['content-type'] || ''
+        let excelBuffer: Buffer
+        if (contentType.includes('application/json')) {
+          const body = await parseJsonBody(req)
+          if (!body.base64) {
+            sendResponse(res, jsonResponse(400, { error: '缺少 base64 数据' }))
+            return
+          }
+          excelBuffer = Buffer.from(body.base64, 'base64')
+        } else {
+          excelBuffer = await parseRawBody(req)
+        }
+        const result = rallyStore.importRosterFromExcel(excelBuffer)
+        sendResponse(res, jsonResponse(result.success ? 200 : 400, result))
+        return
+      }
+
+      // 19. 获取花名册列表
+      if (isGetOrHead && pathname === '/api/v1/admin/roster/list') {
+        if (!user || !isUserAdmin(user.username)) {
+          sendResponse(res, jsonResponse(403, { error: '仅系统管理员可查看花名册' }))
+          return
+        }
+        const roster = rallyStore.getRoster()
+        sendResponse(res, jsonResponse(200, { roster }))
+        return
+      }
+
+      // 20. 手动录入单条花名册
+      if (req.method === 'POST' && pathname === '/api/v1/admin/roster/add') {
+        if (!user || !isUserAdmin(user.username)) {
+          sendResponse(res, jsonResponse(403, { error: '仅系统管理员可录入名单' }))
+          return
+        }
+        const body = await parseJsonBody(req)
+        const result = rallyStore.addRosterUser(body)
+        sendResponse(res, jsonResponse(result.success ? 200 : 400, result))
+        return
+      }
+
+      // 21. 删除花名册人员
+      if (req.method === 'POST' && pathname === '/api/v1/admin/roster/delete') {
+        if (!user || !isUserAdmin(user.username)) {
+          sendResponse(res, jsonResponse(403, { error: '仅系统管理员可删除名单' }))
+          return
+        }
+        const body = await parseJsonBody(req)
+        const targetId = String(body.id || body.name || '').trim()
+        const result = rallyStore.removeRosterUser(targetId)
+        sendResponse(res, jsonResponse(result.success ? 200 : 400, result))
+        return
+      }
+
+      // 22. 新增自定义队伍
+      if (req.method === 'POST' && pathname === '/api/v1/admin/teams/add') {
+        if (!user || !isUserAdmin(user.username)) {
+          sendResponse(res, jsonResponse(403, { error: '仅系统管理员可新增队伍' }))
+          return
+        }
+        const body = await parseJsonBody(req)
+        const result = rallyStore.addTeam(body)
+        sendResponse(res, jsonResponse(result.success ? 200 : 400, result))
+        return
+      }
+
+      // 23. 删除队伍
+      if (req.method === 'POST' && pathname === '/api/v1/admin/teams/delete') {
+        if (!user || !isUserAdmin(user.username)) {
+          sendResponse(res, jsonResponse(403, { error: '仅系统管理员可删除队伍' }))
+          return
+        }
+        const body = await parseJsonBody(req)
+        const teamId = Number(body.teamId)
+        const result = rallyStore.deleteTeam(teamId)
+        sendResponse(res, jsonResponse(result.success ? 200 : 400, result))
+        return
+      }
+
+      // 24. 更新活动标题与规则配置
+      if (req.method === 'POST' && pathname === '/api/v1/admin/activity/config') {
+        if (!user || !isUserAdmin(user.username)) {
+          sendResponse(res, jsonResponse(403, { error: '仅系统管理员可修改活动配置' }))
+          return
+        }
+        const body = await parseJsonBody(req)
+        const result = rallyStore.updateActivityConfig(body)
+        sendResponse(res, jsonResponse(result.success ? 200 : 400, result))
+        return
+      }
+
       sendResponse(res, jsonResponse(404, { error: 'API 未找到' }))
       return
     }
 
-    // 未登录时访问主页面直接 302 重定向到 OIDC 登录 (除非带有 ?mock=1 调试)
-    const isMockParam = requestUrl.searchParams.get('mock') === '1'
-    const isErrorParam = Boolean(requestUrl.searchParams.get('error'))
-    const hasSessionUser = Boolean(currentUser(req))
-    const isStaticAsset = /\.(js|mjs|css|png|jpg|jpeg|webp|svg|ico|woff|woff2)$/i.test(pathname)
-
-    if (!hasSessionUser && !isMockParam && !isErrorParam && !isStaticAsset && (pathname === '/' || pathname === '/index.html')) {
-      const authResp = await oidcLogin(req)
-      sendResponse(res, authResp)
-      return
-    }
-
-    // 托管静态前端资源
+    // 托管静态前端资源（取消强制 302 重定向，直接打开首页）
     if (serveStatic(pathname, res)) {
       return
     }
@@ -413,5 +548,6 @@ const server = createServer(async (req, res) => {
 })
 
 server.listen(appConfig.port, appConfig.host, () => {
-  console.log(`🚩 一步一善·重走经典红色路 系统已启动: http://${appConfig.host}:${appConfig.port}`)
+  console.log(`🏆 荣耀征程·大型团队竞技与拉练争霸系统已启动: http://${appConfig.host}:${appConfig.port}`)
 })
+

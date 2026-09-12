@@ -12,9 +12,10 @@ export interface AuthUser {
   id: string
   username: string
   displayName: string
+  department?: string
   email?: string
   roles: string[]
-  authSource: 'oidc' | 'mock'
+  authSource: 'roster' | 'admin' | 'oidc' | 'mock'
 }
 
 export interface AuthRouteResponse {
@@ -174,11 +175,11 @@ export function resolveRedirectUri(request?: IncomingMessage): string {
     const host = (request.headers['x-forwarded-host'] || request.headers.host || '') as string
     if (host) {
       const cleanHost = host.split(',')[0].trim()
-      const proto = (request.headers['x-forwarded-proto'] || (cleanHost.includes('chencytech.com') ? 'https' : 'http')) as string
+      const proto = (request.headers['x-forwarded-proto'] || 'http') as string
       return `${proto}://${cleanHost}${authPrefix}/oidc/callback`
     }
   }
-  return appConfig.auth.redirectUri || 'https://run.chencytech.com/api/v1/auth/oidc/callback'
+  return appConfig.auth.redirectUri || '/api/v1/auth/oidc/callback'
 }
 
 export async function oidcLogin(request?: IncomingMessage): Promise<AuthRouteResponse> {
@@ -361,6 +362,84 @@ export function createMockSession(username: string, displayName: string): { user
 
   const cookieHeader = cookie(sessionCookieName, signedValue(session), appConfig.auth.sessionTtlMs / 1000)
   return { user, cookieHeader }
+}
+
+export function createSessionCookie(user: AuthUser): string {
+  const session: SignedSession = {
+    exp: Date.now() + appConfig.auth.sessionTtlMs,
+    user,
+  }
+  return cookie(sessionCookieName, signedValue(session), appConfig.auth.sessionTtlMs / 1000)
+}
+
+// 核心功能：通过录入的姓名登录
+export function loginByName(name: string, department?: string): AuthRouteResponse {
+  const cleanName = name.trim()
+  if (!cleanName) {
+    return jsonResponse(400, { error: '请输入姓名' })
+  }
+  const candidates = rallyStore.findRosterUserByName(cleanName)
+  if (candidates.length === 0) {
+    return jsonResponse(404, {
+      error: `未在参赛名单中找到【${cleanName}】，请确认姓名是否正确或联系管理员录入名单`,
+    })
+  }
+
+  let target = candidates[0]
+  if (candidates.length > 1 && department) {
+    const matched = candidates.find((c) => c.department === department.trim())
+    if (matched) target = matched
+  }
+
+  const isAdmin = Boolean(target.isAdmin || rallyStore.isAdmin(target.name))
+  const user: AuthUser = {
+    id: target.id || target.name,
+    username: target.name,
+    displayName: target.name,
+    department: target.department,
+    roles: isAdmin ? ['admin', 'user'] : ['user'],
+    authSource: 'roster',
+  }
+
+  return {
+    status: 200,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'set-cookie': createSessionCookie(user),
+    },
+    body: {
+      success: true,
+      message: `登录成功，欢迎【${user.displayName}】！`,
+      user,
+    },
+  }
+}
+
+// 核心功能：管理员密码快捷通道登录
+export function loginAsAdmin(password: string): AuthRouteResponse {
+  if (!password || password !== appConfig.auth.adminPassword) {
+    return jsonResponse(401, { error: '管理员密码错误，请重试' })
+  }
+  const user: AuthUser = {
+    id: 'admin',
+    username: 'admin',
+    displayName: '系统管理员',
+    department: '组委会',
+    roles: ['admin', 'user'],
+    authSource: 'admin',
+  }
+  return {
+    status: 200,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'set-cookie': createSessionCookie(user),
+    },
+    body: {
+      success: true,
+      message: '管理员登录成功',
+      user,
+    },
+  }
 }
 
 export function logout(): AuthRouteResponse {

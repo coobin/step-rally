@@ -48,6 +48,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ teamId, name, slogan }),
     }),
+  loginByName: (name: string, department?: string) =>
+    request<{ success: boolean; message: string; user: import('./types.ts').AuthUser }>('/auth/login-by-name', {
+      method: 'POST',
+      body: JSON.stringify({ name, department }),
+    }),
+  adminLogin: (password: string) =>
+    request<{ success: boolean; message: string; user: import('./types.ts').AuthUser }>('/auth/admin-login', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
   mockLogin: (username: string, displayName: string) =>
     request<{ success: boolean; user: any }>('/auth/mock-login', {
       method: 'POST',
@@ -57,6 +67,45 @@ export const api = {
     request<{ success: boolean; message: string }>('/admin/reset', {
       method: 'POST',
       body: JSON.stringify({ teamId }),
+    }),
+  importRoster: (base64: string) =>
+    request<{ success: boolean; message: string; count: number; duplicates: number }>('/admin/roster/import', {
+      method: 'POST',
+      body: JSON.stringify({ base64 }),
+    }),
+  getRosterList: () =>
+    request<{ roster: import('./types.ts').RosterUser[] }>('/admin/roster/list'),
+  addRosterUser: (data: { name: string; department?: string; phone?: string; note?: string; isAdmin?: boolean }) =>
+    request<{ success: boolean; message: string; user?: import('./types.ts').RosterUser }>('/admin/roster/add', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  deleteRosterUser: (idOrName: string) =>
+    request<{ success: boolean; message: string }>('/admin/roster/delete', {
+      method: 'POST',
+      body: JSON.stringify({ id: idOrName }),
+    }),
+  getRosterTemplateUrl: () => `${API_BASE}/admin/roster/template`,
+  addTeam: (data: { name: string; slogan?: string; description?: string; icon?: string; maxMembers?: number }) =>
+    request<{ success: boolean; message: string; team?: any }>('/admin/teams/add', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  deleteTeam: (teamId: number) =>
+    request<{ success: boolean; message: string }>('/admin/teams/delete', {
+      method: 'POST',
+      body: JSON.stringify({ teamId }),
+    }),
+  updateActivityConfig: (config: {
+    title?: string
+    theme?: string
+    targetStepsDaily?: number
+    totalKmTarget?: number
+    totalStepsTarget?: number
+  }) =>
+    request<{ success: boolean; message: string }>('/admin/activity/config', {
+      method: 'POST',
+      body: JSON.stringify(config),
     }),
   adminExcludeUser: (
     username: string,

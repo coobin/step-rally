@@ -41,8 +41,8 @@ export async function fetchLdapEmployees(): Promise<LdapEmployee[]> {
       })
       for (const g of groupEntries) {
         const dn = String(g.dn || '')
-        // 从 DN 提取层级链路，找出直接挂载在公司节点下的 1 级部门
-        // 示例: cn=江苏办事处,cn=东区作战平台,cn=联合作战指挥中心,cn=湖南承希科技有限公司,ou=groups,dc=chencytech,dc=com
+        // 从 DN 提取层级链路，找出直接挂载在顶层组织节点下的 1 级部门
+        // 示例: cn=技术部,cn=研发作战平台,cn=总公司,ou=groups,dc=example,dc=com
         const cns: string[] = []
         const parts = dn.split(',')
         for (const p of parts) {
@@ -54,7 +54,7 @@ export async function fetchLdapEmployees(): Promise<LdapEmployee[]> {
 
         let companyIdx = -1
         for (let i = cns.length - 1; i >= 0; i--) {
-          if (cns[i].includes('公司') || cns[i].includes('承希')) {
+          if (cns[i].includes('公司') || cns[i].includes('集团') || cns[i].includes('总部')) {
             companyIdx = i
             break
           }

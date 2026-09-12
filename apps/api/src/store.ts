@@ -12,6 +12,7 @@ import {
   unlinkSync,
 } from 'node:fs'
 import { dirname, resolve, join } from 'node:path'
+import * as XLSX from 'xlsx'
 import { appConfig } from './config.ts'
 import { getCachedEmployees } from './ldap.ts'
 
@@ -55,6 +56,16 @@ export interface ExcludedUser {
   excludedBy?: string
 }
 
+export interface RosterUser {
+  id: string
+  name: string
+  department?: string
+  phone?: string
+  note?: string
+  isAdmin?: boolean
+  createdAt: string
+}
+
 export interface RallyState {
   title: string
   theme: string
@@ -67,22 +78,21 @@ export interface RallyState {
     totalKmTarget: number
   }
   teams: Team[]
+  roster?: RosterUser[]
   excludedUsers?: ExcludedUser[]
   adminUsernames?: string[]
   updatedAt: string
 }
 
 const DEFAULT_TEAMS_INIT: Array<Pick<Team, 'id' | 'name' | 'slogan' | 'description' | 'icon'>> = [
-  { id: 1, name: '井冈星火队', slogan: '星星之火，可以燎原', description: '新四军精神，点燃奋进之火', icon: '🔥' },
-  { id: 2, name: '长征先锋队', slogan: '万水千山只等闲', description: '突破重重险阻，勇往直前', icon: '🚩' },
-  { id: 3, name: '延安奋进队', slogan: '自力更生，艰苦奋斗', description: '宝塔山下，传承红色基因', icon: '🏔️' },
-  { id: 4, name: '太行铁军队', slogan: '巍巍太行，勇夺先锋', description: '百团大战英雄气，众志成城', icon: '🛡️' },
-  { id: 5, name: '红色渡江队', slogan: '百万雄师，奋勇争先', description: '渡江战役，乘风破浪', icon: '⛵' },
-  { id: 6, name: '西柏坡号队', slogan: '赶考路上，永葆初心', description: '进京赶考，砥砺前行', icon: '⭐' },
-  { id: 7, name: '香山启航队', slogan: '胸怀壮志，走向未来', description: '革命圣地，绘就宏伟蓝图', icon: '🌅' },
-  { id: 8, name: '淮海决胜队', slogan: '团结一致，勇夺胜利', description: '人民的胜利，齐心协力', icon: '🏆' },
-  { id: 9, name: '复兴领航队', slogan: '不忘初心，牢记使命', description: '天安门广场，昂首向明天', icon: '🚀' },
-  { id: 10, name: '善行天下队', slogan: '一步一善，筑梦乡村', description: '用脚步传递温暖，让善意抵达远方', icon: '❤️' },
+  { id: 1, name: '雄鹰翱翔队', slogan: '大鹏一日同风起，扶摇直上九万里', description: '高瞻远瞩，锐意进取', icon: '🦅' },
+  { id: 2, name: '雷霆先锋队', slogan: '雷厉风行，勇争第一', description: '迅猛如雷，无往不胜', icon: '⚡' },
+  { id: 3, name: '乘风破浪队', slogan: '长风破浪会有时，直挂云帆济沧海', description: '披荆斩棘，奋勇争先', icon: '⛵' },
+  { id: 4, name: '烈火战狼队', slogan: '烈火淬炼，众志成城', description: '战无不胜，铁血之师', icon: '🔥' },
+  { id: 5, name: '巅峰登顶队', slogan: '无限风光在险峰', description: '勇攀高峰，无惧险阻', icon: '🏔️' },
+  { id: 6, name: '星辰大海队', slogan: '心怀璀璨，追逐星辰', description: '向光而行，奔赴远方', icon: '⭐' },
+  { id: 7, name: '荣耀王者队', slogan: '聚力同心，再铸辉煌', description: '精诚团结，荣耀加冕', icon: '👑' },
+  { id: 8, name: '猛虎腾跃队', slogan: '龙腾虎跃，势不可挡', description: '气势如虹，敢为人先', icon: '🐅' },
 ]
 
 export class RallyStore {
@@ -116,12 +126,21 @@ export class RallyStore {
         if (existsSync(file)) {
           const raw = readFileSync(file, 'utf-8')
           const parsed = JSON.parse(raw) as RallyState
-          if (parsed && Array.isArray(parsed.teams) && parsed.teams.length === 10) {
+          if (parsed && Array.isArray(parsed.teams) && parsed.teams.length > 0) {
+            if (!Array.isArray(parsed.roster)) {
+              parsed.roster = []
+            }
             if (!Array.isArray(parsed.excludedUsers)) {
               parsed.excludedUsers = []
             }
             if (!Array.isArray(parsed.adminUsernames)) {
               parsed.adminUsernames = []
+            }
+            if (!parsed.title || parsed.title.includes('一步一善')) {
+              parsed.title = '荣耀征程 · 大型团队竞技与拉练争霸赛'
+            }
+            if (!parsed.theme || parsed.theme.includes('乡村孩子')) {
+              parsed.theme = '凝心聚力，勇攀高峰，向胜利全速进发！'
             }
             if (file !== this.filePath) {
               console.warn(`⚠️ 主数据文件缺失或损坏，已成功从备份文件恢复数据: ${file}`)
@@ -139,15 +158,15 @@ export class RallyStore {
     console.warn('未找到有效的数据文件或备份，将初始化默认战队数据')
 
     const defaultState: RallyState = {
-      title: '一步一善 · 重走经典红色路',
-      theme: '让行走更有意义，为乡村孩子送去优质课堂',
+      title: '荣耀征程 · 大型团队竞技与拉练争霸赛',
+      theme: '凝心聚力，勇攀高峰，向胜利全速进发！',
       activityRules: {
-        totalTeams: 10,
-        targetPerTeam: 14,
+        totalTeams: 8,
+        targetPerTeam: 10,
         maxPerTeam: 15,
-        targetStepsDaily: 6000,
-        totalStepsTarget: 42000,
-        totalKmTarget: 29.4,
+        targetStepsDaily: 8000,
+        totalStepsTarget: 50000,
+        totalKmTarget: 35,
       },
       teams: DEFAULT_TEAMS_INIT.map((item) => ({
         id: item.id,
@@ -156,10 +175,11 @@ export class RallyStore {
         description: item.description,
         icon: item.icon,
         maxMembers: 15,
-        targetMembers: 14,
+        targetMembers: 10,
         members: [],
         votes: {},
       })),
+      roster: [],
       excludedUsers: [],
       adminUsernames: [],
       updatedAt: new Date().toISOString(),
@@ -322,23 +342,34 @@ export class RallyStore {
     })
   }
 
-  // 获取当前系统所有报名情况及状态（结合 LDAP 全体在职员工）
+  // 获取当前系统所有报名情况及状态（优先使用花名册，可联动 LDAP）
   public async getSnapshot(isAdmin = false) {
     let allEmployees: import('./ldap.ts').LdapEmployee[] = []
-    try {
-      allEmployees = await (await import('./ldap.ts')).fetchLdapEmployees()
-    } catch (e) {
-      console.warn('获取 LDAP 员工失败:', e)
+
+    if (this.state.roster && this.state.roster.length > 0) {
+      allEmployees = this.state.roster.map((r) => ({
+        username: r.name,
+        displayName: r.name,
+        department: r.department || '未分配部门',
+        title: r.note || '队员',
+        email: r.phone || '',
+      }))
+    } else if (appConfig.ldap.enabled) {
+      try {
+        allEmployees = await (await import('./ldap.ts')).fetchLdapEmployees()
+      } catch (e) {
+        console.warn('获取 LDAP 员工失败:', e)
+      }
     }
 
-    // 结合 LDAP 员工信息丰富免报名名单的部门和姓名
+    // 结合员工信息丰富免报名名单的部门和姓名
     const employeeMap = new Map(allEmployees.map((e) => [e.username.toLowerCase(), e]))
 
-    // 自动将队伍中现有成员的部门校准为标准的 1 级部门
+    // 自动将队伍中现有成员的部门校准
     let teamsDepartmentUpdated = false
     for (const t of this.state.teams) {
       for (const m of t.members) {
-        const emp = employeeMap.get(m.username.toLowerCase())
+        const emp = employeeMap.get(m.username.toLowerCase()) || employeeMap.get(m.displayName.toLowerCase())
         if (emp && emp.department && m.department !== emp.department) {
           m.department = emp.department
           teamsDepartmentUpdated = true
@@ -354,6 +385,7 @@ export class RallyStore {
     for (const t of teams) {
       for (const m of t.members) {
         registeredUsernames.add(m.username.toLowerCase())
+        registeredUsernames.add(m.displayName.toLowerCase())
       }
     }
 
@@ -373,7 +405,9 @@ export class RallyStore {
     const unassignedEmployees = allEmployees.filter(
       (e) =>
         !registeredUsernames.has(e.username.toLowerCase()) &&
-        !excludedUsernamesSet.has(e.username.toLowerCase()),
+        !registeredUsernames.has(e.displayName.toLowerCase()) &&
+        !excludedUsernamesSet.has(e.username.toLowerCase()) &&
+        !excludedUsernamesSet.has(e.displayName.toLowerCase()),
     )
 
     const departments = [
@@ -381,11 +415,15 @@ export class RallyStore {
     ].sort((a, b) => a.localeCompare(b, 'zh-CN'))
 
     const totalMembers = teams.reduce((acc, t) => acc + t.memberCount, 0)
-    const totalCompanyEmployees = allEmployees.length > 0 ? allEmployees.length : 142
-    const excludedCount = enrichedExcludedEmployees.length
-    const eligibleEmployeesCount = Math.max(0, totalCompanyEmployees - excludedCount)
     const maxCapacity = teams.reduce((acc, t) => acc + t.maxMembers, 0)
     const targetCapacity = teams.reduce((acc, t) => acc + t.targetMembers, 0)
+
+    const totalCompanyEmployees = allEmployees.length > 0
+      ? allEmployees.length
+      : Math.max(totalMembers, maxCapacity > 0 ? maxCapacity : 100)
+
+    const excludedCount = enrichedExcludedEmployees.length
+    const eligibleEmployeesCount = Math.max(0, totalCompanyEmployees - excludedCount)
     const registrationRate =
       eligibleEmployeesCount > 0 ? Math.round((totalMembers / eligibleEmployeesCount) * 100) : 0
 
@@ -750,8 +788,11 @@ export class RallyStore {
         },
     legacyTeamId?: number,
   ): { success: boolean; message: string; maxPerTeam: number } {
+    const rosterCount = this.state.roster?.length || 0
     const allEmployees = getCachedEmployees()
-    const totalCompanyEmployees = allEmployees.length > 0 ? allEmployees.length : 142
+    const totalCompanyEmployees = rosterCount > 0
+      ? rosterCount
+      : (allEmployees.length > 0 ? allEmployees.length : 1000)
 
     // 1. 批量独立设置各队人数上限：{ teamCapacities: { 1: 14, 2: 15, ... } }
     if (typeof options === 'object' && options.teamCapacities) {
@@ -780,11 +821,11 @@ export class RallyStore {
         updates.push({ team, limit })
       }
 
-      // 核心规则：队伍合计人数不能超过公司总人数
-      if (totalCapacity > totalCompanyEmployees) {
+      // 核心规则：队伍合计人数不能超过总人数（当有录入名单或员工时生效）
+      if (rosterCount > 0 && totalCapacity > totalCompanyEmployees) {
         return {
           success: false,
-          message: `各队伍人数上限总和（${totalCapacity}人）不能超过公司总人数（${totalCompanyEmployees}人）`,
+          message: `各队伍人数上限总和（${totalCapacity}人）不能超过总人数（${totalCompanyEmployees}人）`,
           maxPerTeam: this.state.activityRules.maxPerTeam,
         }
       }
@@ -838,10 +879,10 @@ export class RallyStore {
         (acc, t) => acc + (t.id === targetTeamId ? limit : t.maxMembers),
         0,
       )
-      if (totalCapacity > totalCompanyEmployees) {
+      if (rosterCount > 0 && totalCapacity > totalCompanyEmployees) {
         return {
           success: false,
-          message: `调整后各队人数上限总和（${totalCapacity}人）超过了公司总人数（${totalCompanyEmployees}人）`,
+          message: `调整后各队人数上限总和（${totalCapacity}人）超过了总人数（${totalCompanyEmployees}人）`,
           maxPerTeam: this.state.activityRules.maxPerTeam,
         }
       }
@@ -858,10 +899,10 @@ export class RallyStore {
 
     // 3. 全局统一调整
     const totalCapacity = limit * this.state.teams.length
-    if (totalCapacity > totalCompanyEmployees) {
+    if (rosterCount > 0 && totalCapacity > totalCompanyEmployees) {
       return {
         success: false,
-        message: `统一设为 ${limit} 人将导致队伍总容量（${totalCapacity}人）超过公司总人数（${totalCompanyEmployees}人），请降低单队上限或使用独立队伍设置`,
+        message: `统一设为 ${limit} 人将导致队伍总容量（${totalCapacity}人）超过总人数（${totalCompanyEmployees}人），请降低单队上限或使用独立队伍设置`,
         maxPerTeam: this.state.activityRules.maxPerTeam,
       }
     }
@@ -887,6 +928,245 @@ export class RallyStore {
       message: `已成功将各队人数上限统一设置为 ${limit} 人（合计 ${totalCapacity} / ${totalCompanyEmployees} 人）`,
       maxPerTeam: limit,
     }
+  }
+
+  // 获取当前花名册
+  public getRoster(): RosterUser[] {
+    return this.state.roster || []
+  }
+
+  // 根据姓名匹配花名册人员（不区分全半角及首尾空格）
+  public findRosterUserByName(name: string): RosterUser[] {
+    const clean = name.trim().toLowerCase()
+    if (!clean) return []
+    return (this.state.roster || []).filter((u) => u.name.trim().toLowerCase() === clean)
+  }
+
+  // Excel 导入花名册
+  public importRosterFromExcel(buffer: Buffer): {
+    success: boolean
+    message: string
+    count: number
+    duplicates: number
+  } {
+    try {
+      const workbook = XLSX.read(buffer, { type: 'buffer' })
+      const firstSheetName = workbook.SheetNames[0]
+      if (!firstSheetName) {
+        return { success: false, message: 'Excel 文件中未找到任何工作表', count: 0, duplicates: 0 }
+      }
+      const worksheet = workbook.Sheets[firstSheetName]
+      const rawRows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet)
+
+      if (!Array.isArray(rawRows) || rawRows.length === 0) {
+        return { success: false, message: 'Excel 表中无有效数据', count: 0, duplicates: 0 }
+      }
+
+      if (!this.state.roster) {
+        this.state.roster = []
+      }
+
+      let importedCount = 0
+      let updatedCount = 0
+
+      for (const row of rawRows) {
+        // 智能匹配列名
+        let name = ''
+        let department = ''
+        let phone = ''
+        let note = ''
+
+        for (const [key, val] of Object.entries(row)) {
+          const k = String(key).trim().toLowerCase()
+          const v = String(val ?? '').trim()
+          if (!v) continue
+
+          if (k.includes('姓名') || k === '名字' || k === 'name' || k === '人员') {
+            name = v
+          } else if (k.includes('部门') || k.includes('单位') || k.includes('组别') || k === 'department') {
+            department = v
+          } else if (k.includes('手机') || k.includes('电话') || k === 'phone' || k === 'mobile') {
+            phone = v
+          } else if (k.includes('备注') || k === 'note' || k === '说明') {
+            note = v
+          }
+        }
+
+        if (!name) continue
+
+        const existing = this.state.roster.find(
+          (u) => u.name.trim().toLowerCase() === name.toLowerCase(),
+        )
+
+        if (existing) {
+          if (department) existing.department = department
+          if (phone) existing.phone = phone
+          if (note) existing.note = note
+          updatedCount++
+        } else {
+          this.state.roster.push({
+            id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            name,
+            department: department || undefined,
+            phone: phone || undefined,
+            note: note || undefined,
+            createdAt: new Date().toISOString(),
+          })
+          importedCount++
+        }
+      }
+
+      this.saveState()
+      return {
+        success: true,
+        message: `导入成功！新增 ${importedCount} 人，更新 ${updatedCount} 人`,
+        count: importedCount,
+        duplicates: updatedCount,
+      }
+    } catch (err: any) {
+      console.error('Excel 导入异常:', err)
+      return { success: false, message: `解析 Excel 失败: ${err?.message || '文件格式不正确'}`, count: 0, duplicates: 0 }
+    }
+  }
+
+  // 手动单人添加花名册
+  public addRosterUser(data: {
+    name: string
+    department?: string
+    phone?: string
+    note?: string
+    isAdmin?: boolean
+  }): { success: boolean; message: string; user?: RosterUser } {
+    const name = data.name?.trim()
+    if (!name) {
+      return { success: false, message: '姓名不能为空' }
+    }
+
+    if (!this.state.roster) {
+      this.state.roster = []
+    }
+
+    const existing = this.state.roster.find(
+      (u) => u.name.trim().toLowerCase() === name.toLowerCase(),
+    )
+    if (existing) {
+      existing.department = data.department?.trim() || existing.department
+      existing.phone = data.phone?.trim() || existing.phone
+      existing.note = data.note?.trim() || existing.note
+      if (data.isAdmin !== undefined) existing.isAdmin = data.isAdmin
+      this.saveState()
+      return { success: true, message: `【${name}】已在名单中，已更新其信息`, user: existing }
+    }
+
+    const newUser: RosterUser = {
+      id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name,
+      department: data.department?.trim() || undefined,
+      phone: data.phone?.trim() || undefined,
+      note: data.note?.trim() || undefined,
+      isAdmin: data.isAdmin,
+      createdAt: new Date().toISOString(),
+    }
+
+    this.state.roster.push(newUser)
+    this.saveState()
+    return { success: true, message: `已成功将【${name}】录入参赛名单`, user: newUser }
+  }
+
+  // 删除花名册人员
+  public removeRosterUser(idOrName: string): { success: boolean; message: string } {
+    if (!this.state.roster) return { success: false, message: '名单为空' }
+    const target = idOrName.trim().toLowerCase()
+    const index = this.state.roster.findIndex(
+      (u) => u.id.toLowerCase() === target || u.name.toLowerCase() === target,
+    )
+    if (index === -1) {
+      return { success: false, message: '未找到该人员' }
+    }
+
+    const removed = this.state.roster.splice(index, 1)[0]
+    // 同步从队伍中移除
+    this.leaveTeam(removed.name)
+    this.saveState()
+    return { success: true, message: `已从名单中移除【${removed.name}】` }
+  }
+
+  // 新增队伍
+  public addTeam(data: {
+    name: string
+    slogan?: string
+    description?: string
+    icon?: string
+    maxMembers?: number
+  }): { success: boolean; message: string; team?: Team } {
+    const name = data.name?.trim()
+    if (!name) {
+      return { success: false, message: '队伍名称不能为空' }
+    }
+    if (this.state.teams.some((t) => t.name === name)) {
+      return { success: false, message: `队伍【${name}】已存在，请使用其他名称` }
+    }
+
+    const nextId = this.state.teams.length > 0
+      ? Math.max(...this.state.teams.map((t) => t.id)) + 1
+      : 1
+
+    const newTeam: Team = {
+      id: nextId,
+      name,
+      slogan: data.slogan?.trim() || '团结一心，勇往直前',
+      description: data.description?.trim() || '',
+      icon: data.icon?.trim() || '🚩',
+      maxMembers: Number(data.maxMembers) || this.state.activityRules.maxPerTeam || 15,
+      targetMembers: this.state.activityRules.targetPerTeam || 10,
+      members: [],
+      votes: {},
+    }
+
+    this.state.teams.push(newTeam)
+    this.state.activityRules.totalTeams = this.state.teams.length
+    this.saveState()
+    return { success: true, message: `已成功创建队伍【${name}】`, team: newTeam }
+  }
+
+  // 删除队伍
+  public deleteTeam(teamId: number): { success: boolean; message: string } {
+    const index = this.state.teams.findIndex((t) => t.id === teamId)
+    if (index === -1) {
+      return { success: false, message: '队伍不存在' }
+    }
+    const team = this.state.teams[index]
+    this.state.teams.splice(index, 1)
+    this.state.activityRules.totalTeams = this.state.teams.length
+    this.saveState()
+    return { success: true, message: `已成功解散并删除队伍【${team.name}】` }
+  }
+
+  // 更新活动规则和主题配置
+  public updateActivityConfig(config: {
+    title?: string
+    theme?: string
+    targetStepsDaily?: number
+    totalKmTarget?: number
+    totalStepsTarget?: number
+  }): { success: boolean; message: string } {
+    if (config.title?.trim()) {
+      this.state.title = config.title.trim()
+    }
+    if (config.theme?.trim()) {
+      this.state.theme = config.theme.trim()
+    }
+    if (config.targetStepsDaily && Number(config.targetStepsDaily) > 0) {
+      this.state.activityRules.targetStepsDaily = Number(config.targetStepsDaily)
+    }
+    if (config.totalKmTarget && Number(config.totalKmTarget) > 0) {
+      this.state.activityRules.totalKmTarget = Number(config.totalKmTarget)
+    }
+    if (config.totalStepsTarget && Number(config.totalStepsTarget) > 0) {
+      this.state.activityRules.totalStepsTarget = Number(config.totalStepsTarget)
+    }
+    this.saveState()
+    return { success: true, message: '活动配置已更新' }
   }
 }
 

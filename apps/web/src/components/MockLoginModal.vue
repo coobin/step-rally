@@ -13,7 +13,7 @@ const displayName = ref('')
 const loading = ref(false)
 
 const presets = [
-  { username: 'admin', displayName: '系统管理员 (Admin)' },
+  { username: 'hekaixuan', displayName: '何恺旋 (管理员)' },
   { username: 'zhangwei', displayName: '张伟' },
   { username: 'wangfang', displayName: '王芳' },
   { username: 'liming', displayName: '李明' },
@@ -97,7 +97,7 @@ async function handleLogin() {
             v-model="username"
             type="text"
             required
-            placeholder="例如：admin / zhangsan"
+            placeholder="例如：hekaixuan / zhangwei"
             class="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:border-red-500 font-mono"
           />
         </div>
